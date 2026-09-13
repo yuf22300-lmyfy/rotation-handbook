@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#131722">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>轮动手册 · 币圈 / A股</title>
+<style>
+  :root{ --bg:#131722; --panel:#1e222d; --border:#2a2e39; --text:#d1d4dc; --muted:#787b86;
+    --blue:#2962ff; --green:#26a69a; --red:#ef5350; --amber:#ffb74d; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font:14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; padding:16px; max-width:1000px; margin:0 auto;}
+  h1{font-size:18px; color:#fff; margin-bottom:2px;}
+  .sub{color:var(--muted); font-size:12px; margin-bottom:12px;}
+  .modebar{display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:12px;}
+  .modebar button{flex:1; background:transparent; color:var(--muted); border:0; padding:9px 0; cursor:pointer; font-size:14px; border-right:1px solid var(--border);}
+  .modebar button:last-child{border-right:0;}
+  .modebar button.on{background:var(--blue); color:#fff;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin-bottom:10px; color:#fff;}
+  button{background:var(--blue); color:#fff; border:0; border-radius:6px; padding:9px 20px; font-size:14px; cursor:pointer;}
+  button.ghost{background:transparent; border:1px solid var(--border); color:var(--muted);}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  table{width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums;}
+  th{color:var(--muted); font-weight:500; text-align:right; padding:6px 8px; border-bottom:1px solid var(--border);}
+  td{padding:7px 8px; border-bottom:1px solid #22262f; text-align:right;}
+  th:first-child, td:first-child{text-align:left;}
+  .up{color:var(--green);} .dn{color:var(--red);} .mut{color:var(--muted);} .am{color:var(--amber);}
+  .tag{display:inline-block; padding:1px 8px; border-radius:4px; font-size:11px;}
+  .tag.buy{background:rgba(38,166,154,.15); color:var(--green);}
+  .tag.cash{background:rgba(120,123,134,.15); color:var(--muted);}
+  #orderBox{font-size:15px; line-height:2;}
+  .note{color:var(--muted); font-size:12px; line-height:1.8;}
+  .note b{color:var(--text);}
+  input[type=number]{background:#131722; border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 8px; width:110px; font-size:13px;}
+  .hist td{font-size:12px;}
+  #status{font-size:12px; color:var(--muted); margin-left:10px;}
+  .warn{border-color:#5a4a1e;}
+  #guideMask{display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:50; overflow-y:auto; padding:24px 12px;}
+  #guideMask.open{display:block;}
+  #guideBox{max-width:760px; margin:0 auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px 24px;}
+  #guideBox h3{color:#fff; font-size:15px; margin:16px 0 6px;}
+  #guideBox h3:first-of-type{margin-top:4px;}
+  #guideBox p, #guideBox li{font-size:13px; color:var(--text); line-height:1.9;}
+  #guideBox li{margin-left:18px;}
+  #guideBox .gk{color:var(--muted);}
+  #guideBox .gup{color:var(--green); font-weight:600;} #guideBox .gdn{color:var(--red); font-weight:600;}
+  #guideClose{float:right; background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 12px; cursor:pointer;}
+  #guideBtn{background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:6px; padding:6px 14px; cursor:pointer; font-size:13px; margin-bottom:12px; width:100%;}
+  @media (max-width:600px){
+    body{padding:10px 10px 24px; font-size:13px;}
+    .card{padding:10px 12px; border-radius:8px;}
+    #rankWrap, .card{overflow-x:auto;}
+    table{font-size:12px;}
+    #verdictBox{font-size:15px !important; line-height:1.9;}
+    .modebar button{font-size:12px; padding:8px 0;}
+    #guideBox{padding:14px;}
+  }
+</style>
+</head>
+<body>
+<h1>轮动手册</h1>
+<div class="sub" id="subLine">横截面动量 + 现金阀 + 每日负动量退出 · 前 3 名且动量 &gt; 0 各 1/3,缺额持现金 · <b>每天快检 1 分钟 + 每周固定日换仓</b> · 1 倍无杠杆</div>
+
+<button id="guideBtn">📖 傻瓜说明书(第一次用,先点这个)</button>
+
+<div class="modebar" id="modeBar">
+  <button data-m="crypto" class="on">币圈 · 8 币(14天动量)</button>
+  <button data-m="cn">A股 · 12 ETF(14个交易日动量)</button>
+</div>
+
+<div class="card" id="verdictCard" style="border-color:#2962ff; background:#1a2033;">
+  <h2>🎯 当前指令(打开页面自动判断)<span id="vTime" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
+  <div id="verdictBox" class="mut" style="font-size:16px; line-height:2.1;">正在拉取行情…</div>
+</div>
+
+<div class="card">
+  <h2>入场/离场时间表(固定节奏,不许漂移)</h2>
+  <div class="note">
+    <b>入场:</b>每周固定一天晚上(例如周日 20:00,自选但定了就不改)→ 刷新排名 → 按【买入】指令成交。币圈=OKX 现货市价;A股=场内 ETF 按市价单,资金 1/3 取整到 100 份。<br>
+    <b>离场:</b>两个触发器,先到先执行——①<b>每天</b>固定时点快检,持仓动量 ≤ 0 → <b>当天收盘前</b>卖出;②周度排名日,持仓掉出前 3 → 换仓时卖出。<br>
+    <b>不做的事:</b>盘中不盯、不挂单等回调、不凭感觉跑。A股遇到涨停一字板买不进就放弃该名额持现金,次日再看,不追。
+  </div>
+</div>
+
+<div class="card">
+  <h2>第一步:刷新排名 <span id="status"></span></h2>
+  <button id="fetchBtn">拉取行情,计算排名</button>
+  <div style="margin-top:10px;" id="manualRow" class="note">
+    自动拉取失败时手动模式:填入各标的动量百分比后点下方按钮:
+    <div style="margin-top:6px;" id="manualInputs"></div>
+    <button class="ghost" id="manualBtn" style="margin-top:8px;">按手动数据计算</button>
+  </div>
+  <div id="rankWrap" style="display:none; margin-top:12px;">
+    <table id="rankT"><thead><tr><th>标的</th><th>现价</th><th id="thPast">N天前</th><th id="thMom">动量</th><th>排名</th><th>指令</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>第二步:对照上周持仓,执行换仓</h2>
+  <div id="orderBox" class="mut">先刷新排名。</div>
+  <div style="margin-top:10px;">
+    <span class="note">袖仓总值(USDT 或 元):</span>
+    <input type="number" id="sleeveVal" step="10" placeholder="例如 500">
+    <button class="ghost" id="doneBtn" disabled>✅ 已完成换仓,记录本周</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="histTitle">本周记录 / 历史台账</h2>
+  <table class="hist" id="histT"><thead><tr><th>日期</th><th>持有</th><th>动量快照</th><th>净值</th></tr></thead><tbody></tbody></table>
+  <div style="margin-top:8px;"><button class="ghost" id="clearBtn" style="font-size:12px;">清空当前模式台账(慎)</button></div>
+</div>
+
+<div class="card warn">
+  <h2>规矩(每次执行前读一遍)</h2>
+  <div class="note">
+    <b>1. 周频不许拖。</b>这 10 分钟就是策略本体,月频成绩掉到零头。<br>
+    <b>2. 每笔按市价直接成交。</b>回测口径手续费已含(币圈 0.1%/边;A 股 ETF 实际更低)。<br>
+    <b>3. 凑不满 3 个正动量标的就持现金,不许多买;持仓动量转负,当天卖不等周末。</b>每日退出是最大的单项补丁(币圈:五年 +390%→+711%,深熊年 -46%→-31%)。<br>
+    <b>4. 掉出前 3 就卖,不加理由。</b><br>
+    <b>5. 回撤 29~46% 属正常。</b>币圈袖仓 ≤ 总资金 5%;A 股袖仓 ≤ 可投资金 20%。诚实回测:A 股版五年 +36%(含 2021-24 熊段先亏 23%),不是印钞机。<br>
+    <b>6. 台账每周记,26 周后对照"等权买一篮子不动"。</b>明显跑输就停,这是失效开关。<br>
+    <b>7. 两个模式完全独立</b>(标的不同、周期参数不同、台账分开),互不影响。<br>
+    <b>8. 周中看到"可以买的标的"不操作。</b>买入只有一个入口:周度换仓日。快检只管卖出(动量转负),从来不管买入——盘中冒出来的新机会等周五,少赚一周不是亏。<br>
+    <b>9. 休市顺延。</b>A 股节假日休市,当天该做的快检/换仓顺延到下一个交易日,不补做、不提前。<br>
+    <b>10. 涨停一字板买不进就放弃名额持现金,次日再看,不追。</b><br>
+    <b>11. 纳指溢价 &gt; 2% 这周不买,持现金。</b>券商 App 里看"IOPV/溢价率"。<br>
+    <b>12. A 股手续费可无视。</b>ETF 无印花税,万元 1~3 元,回测按 0.1% 扣的,实盘只会更好。<br>
+    <b>13. 买不起一手(100 份)的名额跳过,持现金,不凑。</b>黄金一手约 890 元、沪深300 约 400 元——袖仓 ≥ 3000 元才能保证 12 只都买得起;选券商要选"免五"账户(无最低 5 元佣金),否则小额会被佣金吃光。
+  </div>
+</div>
+
+<div id="guideMask">
+  <div id="guideBox">
+    <button id="guideClose">关闭 ✕</button>
+    <h3>🪙 币圈规则 · 傻瓜版</h3>
+    <p><b>一句话:你有 3 把椅子,每把椅子要么坐一个"最近 14 天涨得最猛的币",要么空着(空椅子 = 钱放 USDT)。每周日晚重新选一次坐谁;每天早上看一眼,谁不行了立刻赶下椅子。</b></p>
+    <h3>账户里永远只有三种状态</h3>
+    <p>假设拿 900 USDT 玩(每把椅子 300):<br>
+    ① 椅子坐着币 = 那 300 U 买成了某个币;<br>
+    ② 椅子空着 = 那 300 U 是 USDT,躺平;<br>
+    ③ 永远不会有的状态:一把椅子坐两个币 / 全梭一个币 / 加杠杆。</p>
+    <h3>每周日晚 20:00 · 选椅子(10 分钟)</h3>
+    <ul>
+      <li>看 🎯 标签:<span class="gup">【入场】买 XXX</span> → OKX 现货市价买入;<span class="gdn">【离场】卖 XXX</span> → 全部市价卖掉;<br>"继续持有" → 什么都不做;按"✅ 已完成换仓,记录本周"。收工。</li>
+      <li>标签说买就买,说卖就卖,说不动就不动——你不需要懂为什么,规则已经替你想过了。</li>
+    </ul>
+    <h3>每天早上 8 点后 · 点名(1 分钟)</h3>
+    <ul>
+      <li>只看一件事:<span class="gdn">【离场】</span>有没有出现?有 → 把那个币卖掉,今天就这一下;没有 → 关掉去干别的。</li>
+      <li>为什么每天查:币跌起来不等人,"转负当天就踢"这一条是回测里最大的单项补丁。</li>
+    </ul>
+    <h3>谁能坐上椅子?一条标准</h3>
+    <p><b>过去 14 天涨幅为正,且在 8 个币里排前三。</b>手册自动算好排名,你只看指令。8 个币全在跌?3 把椅子全空,100% 躺 USDT——<b>空仓也是持仓,而且是保命的那种。</b></p>
+    <h3>四条"千万别"</h3>
+    <ul>
+      <li><b>别跳过周日</b>——出差、懒、觉得没行情都不是理由,10 分钟就是策略本体;</li>
+      <li><b>别提前买</b>——周三看到某币涨得凶也不行,买入只发生在周日(周一到周六只卖不买);</li>
+      <li><b>别扛单</b>——标签说卖不卖、想"再等等"?策略没有这个选项;</li>
+      <li><b>别加杠杆</b>——1 倍现货,"爆仓"这个词和你无关,永远保持。</li>
+    </ul>
+    <h3>什么情况说明它坏了</h3>
+    <p>台账每周都在记。<b>连续 26 周,成绩还不如"8 个币各买 1/8 睡大觉" → 停用</b>。不是你做错了,是策略在当前市场失效,换思路重来。</p>
+    <h3>🇨🇳 A股模式的区别(其余完全一样)</h3>
+    <ul>
+      <li>标的换成 12 只行业 ETF;动量窗口是 <b>14 个交易日</b>(约 3 周);</li>
+      <li>每周<b>周五 14:30</b> 换仓(收盘前顺手做完),每天 14:30 快检;</li>
+      <li>买入数量 = 袖仓钱 ÷ 3 ÷ 现价,<b>向下取整到 100 份</b>;买不起一手(如黄金约 890 元)就跳过该名额持现金;</li>
+      <li>涨停一字板买不进 → 放弃名额持现金,次日再看,不追;纳指溢价 &gt; 2% 这周不买;</li>
+      <li>节假日休市,当天的事顺延到下一个交易日;卖出后的钱当天能再用,回银行卡 T+1;</li>
+      <li>券商选"免五"账户(无最低 5 元佣金);手续费万元 1~3 元,可无视。</li>
+    </ul>
+  </div>
+</div>
+<script>
+var MODES = {
+  crypto: {
+    label: "币圈", L: 14, LLabel: "14天",
+    items: ["ETH","BTC","SOL","BNB","XRP","DOGE","AVAX","LINK"],
+    names: {}, unitNote: "各 1/3 仓位,OKX 现货市价"
+  },
+  cn: {
+    label: "A股", L: 14, LLabel: "14个交易日",
+    items: [
+      { id: "1.510300", code: "hs300", name: "沪深300" },
+      { id: "0.159915", code: "cyb", name: "创业板" },
+      { id: "1.512880", code: "sec", name: "证券" },
+      { id: "1.512170", code: "med", name: "医疗" },
+      { id: "1.512690", code: "wine", name: "酒" },
+      { id: "1.512480", code: "chip", name: "半导体" },
+      { id: "1.512400", code: "metal", name: "有色" },
+      { id: "1.512660", code: "mil", name: "军工" },
+      { id: "1.512800", code: "bank", name: "银行" },
+      { id: "1.515030", code: "nev", name: "新能源车" },
+      { id: "1.518880", code: "gold", name: "黄金" },
+      { id: "1.513100", code: "nas", name: "纳指" }
+    ],
+    unitNote: "各 1/3 资金,取整到 100 份,场内 ETF 市价单"
+  }
+};
+var curMode = "crypto";
+var LS_KEY = "rot_handbook_v2";
+var S = { crypto: { lastWeek: null, hist: [] }, cn: { lastWeek: null, hist: [] } };
+try {
+  var raw = localStorage.getItem(LS_KEY);
+  if (raw) S = JSON.parse(raw);
+  else {
+    var old = localStorage.getItem("rot_handbook_v1");
+    if (old) S.crypto = JSON.parse(old);
+  }
+} catch(e){}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+function ST(){ return S[curMode]; }
+function M(){ return MODES[curMode]; }
+function itemName(it){ return typeof it === "string" ? it : it.name; }
+function itemKey(it){ return typeof it === "string" ? it : it.code; }
+var curMom = null;
+
+function renderManualInputs(){
+  var h = "";
+  var items = M().items;
+  for (var i = 0; i < items.length; i++) h += itemName(items[i]) + ' <input type="number" id="m_' + itemKey(items[i]) + '" step="0.1" placeholder="%"> &nbsp;';
+  document.getElementById("manualInputs").innerHTML = h;
+  document.getElementById("thPast").textContent = M().LLabel + "前";
+  document.getElementById("thMom").textContent = M().LLabel + "动量";
+}
+function fmt(x, d){ return Number(x).toLocaleString("en-US",{minimumFractionDigits:d===undefined?2:d, maximumFractionDigits:d===undefined?2:d}); }
+
+function compute(moms, prices, pasts){
+  curMom = moms;
+  var items = M().items;
+  var rows = [];
+  for (var i = 0; i < items.length; i++) {
+    var k = itemKey(items[i]);
+    rows.push({ c: itemName(items[i]), k: k, m: moms[k], p: prices ? prices[k] : null, q: pasts ? pasts[k] : null });
+  }
+  rows.sort(function(a,b){ return b.m - a.m; });
+  var top3 = [];
+  for (var i = 0; i < rows.length && top3.length < 3; i++) if (rows[i].m > 0) top3.push(rows[i].c);
+  var tb = document.querySelector("#rankT tbody");
+  var h = "";
+  for (var i = 0; i < rows.length; i++){
+    var r = rows[i];
+    var instr = "", cls = "cash";
+    if (top3.indexOf(r.c) >= 0){ cls = "buy"; instr = "持有 1/3"; }
+    else if (r.m > 0){ instr = "不买(前3之外)"; }
+    else { instr = "负动量·现金"; }
+    h += "<tr><td><b>" + r.c + "</b></td><td>" + (r.p ? fmt(r.p, r.p < 1 ? 4 : 2) : "—") + "</td><td class='mut'>" + (r.q ? fmt(r.q, r.q < 1 ? 4 : 2) : "—") + "</td>" +
+      "<td class='" + (r.m >= 0 ? "up" : "dn") + "'>" + (r.m >= 0 ? "+" : "") + r.m.toFixed(1) + "%</td><td>" + (i + 1) + "</td>" +
+      "<td><span class='tag " + cls + "'>" + instr + "</span></td></tr>";
+  }
+  tb.innerHTML = h;
+  document.getElementById("rankWrap").style.display = "block";
+  renderOrder(top3);
+  renderVerdict(top3);
+  curMom._top3 = top3;
+  document.getElementById("doneBtn").disabled = false;
+}
+
+function renderOrder(top3){
+  var box = document.getElementById("orderBox");
+  var daily = "";
+  var lw = ST().lastWeek;
+  if (lw && lw.hold && lw.hold.length){
+    daily += '<div style="border-top:1px solid #2a2e39;margin-top:8px;padding-top:6px;font-size:13px;"><b>每日快检</b>(持仓动量转负 → 当天卖出,等周度补位): ';
+    var negs = [];
+    for (var i = 0; i < lw.hold.length; i++){
+      var c = lw.hold[i], m = curMom ? curMom[c] : null;
+      if (m === null || m === undefined) continue;
+      daily += c + ' <span class="' + (m > 0 ? 'up' : 'dn') + '">' + (m >= 0 ? '+' : '') + m.toFixed(1) + '%</span> &nbsp;';
+      if (m <= 0) negs.push(c);
+    }
+    daily += '</div>';
+    if (negs.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应卖出:' + negs.join("、") + '</b></div>';
+    else daily += '<div class="up" style="font-size:13px;">持仓动量均为正,今日不动。</div>';
+  }
+  if (!top3 || top3.length === 0){
+    box.innerHTML = '<span class="dn">全员负动量 → <b>全部持现金</b>,等下周。</span>' + daily;
+    return;
+  }
+  var last = lw ? lw.hold : [];
+  var buys = [], sells = [], keeps = [];
+  for (var i = 0; i < top3.length; i++) (last.indexOf(top3[i]) >= 0 ? keeps : buys).push(top3[i]);
+  for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) sells.push(last[i]);
+  var h = "";
+  if (last.length === 0) h += '<div>尚无上周记录 → 首周建仓(' + M().unitNote + '):</div>';
+  if (sells.length) h += '<div class="dn">卖出:' + sells.join("、") + '</div>';
+  if (buys.length) h += '<div class="up">买入:' + buys.join("、") + '(' + M().unitNote + ')</div>';
+  if (keeps.length) h += '<div style="color:#7f9bff">继续持有:' + keeps.join("、") + '(不动)</div>';
+  if (top3.length < 3) h += '<div class="am">只有 ' + top3.length + ' 个正动量标的 → 其余 ' + (3 - top3.length) + '/3 持现金。</div>';
+  h += '<div class="mut" style="font-size:12px;margin-top:4px;">本周组合:' + (top3.join(" / ") || "全现金") + '</div>';
+  box.innerHTML = h + daily;
+}
+
+function renderVerdict(top3){
+  var box = document.getElementById("verdictBox");
+  var last = ST().lastWeek ? ST().lastWeek.hold : [];
+  document.getElementById("vTime").textContent = new Date().toLocaleString("zh-CN");
+  var cashSlots = 3 - top3.length;
+  var h = "";
+  h += '<div><span class="tag ' + (top3.length === 3 ? "buy" : "cash") + '" style="font-size:13px;">当前状态[' + M().label + ']:' +
+    (top3.length === 0 ? "全现金" : "持 " + top3.length + "/3 仓" + (cashSlots > 0 ? "(" + cashSlots + " 仓现金)" : "")) + '</span>' +
+    (top3.length ? ' <b style="font-size:15px;">' + top3.join(" · ") + '</b>' : "") + "</div>";
+  var enters = [], exits = [];
+  for (var i = 0; i < top3.length; i++) if (last.indexOf(top3[i]) < 0) enters.push(top3[i]);
+  for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) exits.push(last[i]);
+  h += enters.length ? '<div class="up" style="font-size:17px;">【入场】买 ' + enters.join("、") + '(' + M().unitNote + ')</div>'
+                     : '<div class="mut">【入场】无新买入' + (top3.length ? "(持仓已在榜)" : "(无正动量,不上场)") + "</div>";
+  h += exits.length ? '<div class="dn" style="font-size:17px;">【离场】卖 ' + exits.join("、") + "(掉出前3/动量转负)</div>"
+                    : '<div class="mut">【离场】无(持仓动量均为正)</div>';
+  var lw = ST().lastWeek;
+  if (lw && lw.date){
+    var next = new Date(lw.date + "T00:00:00Z");
+    next.setUTCDate(next.getUTCDate() + 7);
+    var days = Math.ceil((next - Date.now()) / 86400000);
+    h += '<div class="mut" style="font-size:13px;">下次周度换仓:约 ' + (days <= 0 ? "已到期,今天就换" : days + " 天后") + "(上次记录 " + lw.date + ")</div>";
+  } else {
+    h += '<div class="mut" style="font-size:13px;">[' + M().label + '] 尚无持仓记录——首次使用:按【入场】买入后,点"已完成换仓,记录本周"。</div>';
+  }
+  box.innerHTML = h;
+}
+
+function jsonp(url){
+  return new Promise(function(resolve, reject){
+    var cb = "emcb_" + Math.random().toString(36).slice(2);
+    var s = document.createElement("script");
+    window[cb] = function(data){ resolve(data); delete window[cb]; s.remove(); };
+    s.onerror = function(){ reject(new Error("jsonp fail")); delete window[cb]; s.remove(); };
+    s.src = url + "&cb=" + cb;
+    document.head.appendChild(s);
+  });
+}
+
+function doFetch(){
+  var st = document.getElementById("status");
+  st.textContent = "拉取中…";
+  var moms = {}, prices = {}, pasts = {}, done = 0, fail = 0;
+  var items = M().items;
+  function finish(){
+    if (fail > 0){
+      st.innerHTML = '<span class="dn">自动拉取失败(' + fail + ' 个),请用手动模式</span>';
+      document.getElementById("verdictBox").innerHTML = '<span class="dn">[' + M().label + '] 行情拉取失败,请用手动模式。</span>';
+      return;
+    }
+    st.textContent = "更新于 " + new Date().toLocaleString("zh-CN");
+    compute(moms, prices, pasts);
+  }
+  if (curMode === "crypto"){
+    for (var i = 0; i < items.length; i++){
+      (function(coin){
+        fetch("https://www.okx.com/api/v5/market/candles?instId=" + coin + "-USDT&bar=1D&limit=15")
+          .then(function(r){ return r.json(); })
+          .then(function(j){
+            var d = j.data;
+            if (!d || d.length < 10){ fail++; }
+            else {
+              var now = parseFloat(d[0][4]);
+              var past = parseFloat(d[Math.min(14, d.length - 1)][4]);
+              prices[coin] = now; pasts[coin] = past;
+              moms[coin] = 100 * (now / past - 1);
+            }
+          })
+          .catch(function(){ fail++; })
+          .then(function(){ done++; if (done === items.length) finish(); });
+      })(items[i]);
+    }
+  } else {
+    // A-share ETFs via eastmoney JSONP (works despite CORS)
+    for (var i = 0; i < items.length; i++){
+      (function(it){
+        var url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + it.id +
+          "&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55&klt=101&fqt=1&beg=0&end=20500101&lmt=25";
+        jsonp(url).then(function(j){
+          var k = j && j.data && j.data.klines;
+          if (!k || k.length < 22){ fail++; }
+          else {
+            // rows: date,open,close,high,low,...  ascending by date
+            var nowRow = k[k.length - 1].split(",");
+            var pastRow = k[k.length - 1 - M().L].split(",");
+            var now = parseFloat(nowRow[2]), past = parseFloat(pastRow[2]);
+            prices[it.code] = now; pasts[it.code] = past;
+            moms[it.code] = 100 * (now / past - 1);
+          }
+        }).catch(function(){ fail++; })
+          .then(function(){ done++; if (done === items.length) finish(); });
+      })(items[i]);
+    }
+  }
+}
+document.getElementById("fetchBtn").onclick = doFetch;
+
+document.getElementById("manualBtn").onclick = function(){
+  var items = M().items, moms = {}, ok = true;
+  for (var i = 0; i < items.length; i++){
+    var v = parseFloat(document.getElementById("m_" + itemKey(items[i])).value);
+    if (isNaN(v)) ok = false; else moms[itemKey(items[i])] = v;
+  }
+  if (!ok){ document.getElementById("status").innerHTML = '<span class="dn">还有标的没填</span>'; return; }
+  compute(moms, null, null);
+  document.getElementById("status").textContent = "手动模式 · " + new Date().toLocaleString("zh-CN");
+};
+
+document.getElementById("doneBtn").onclick = function(){
+  if (!curMom || !curMom._top3) return;
+  var val = parseFloat(document.getElementById("sleeveVal").value);
+  var snap = [];
+  var items = M().items;
+  for (var i = 0; i < items.length; i++) snap.push(itemName(items[i]) + " " + (curMom[itemKey(items[i])] >= 0 ? "+" : "") + curMom[itemKey(items[i])].toFixed(0) + "%");
+  ST().lastWeek = { date: new Date().toISOString().slice(0, 10), hold: curMom._top3.slice() };
+  ST().hist.unshift({ date: ST().lastWeek.date, hold: curMom._top3.join("+") || "现金", snap: snap.join(", "), val: isNaN(val) ? "" : val });
+  if (ST().hist.length > 200) ST().hist.pop();
+  save(); renderHist();
+  document.getElementById("orderBox").innerHTML += '<div class="up" style="margin-top:6px;">✅ 已记录。下周同一时间再来。</div>';
+};
+
+function renderHist(){
+  var tb = document.querySelector("#histT tbody");
+  document.getElementById("histTitle").textContent = "本周记录 / 历史台账 [" + M().label + "]";
+  if (!ST().hist.length){ tb.innerHTML = '<tr><td colspan="4" class="mut">还没有记录</td></tr>'; return; }
+  tb.innerHTML = ST().hist.map(function(h){
+    return "<tr><td>" + h.date + "</td><td><b>" + h.hold + "</b></td><td class='mut' style='font-size:11px;max-width:340px;white-space:normal;'>" + h.snap + "</td><td>" + (h.val === "" ? "—" : h.val) + "</td></tr>";
+  }).join("");
+}
+document.getElementById("clearBtn").onclick = function(){
+  if (confirm("确定清空 [" + M().label + "] 的台账?")){
+    S[curMode] = { lastWeek: null, hist: [] };
+    save(); renderHist();
+  }
+};
+
+document.getElementById("modeBar").addEventListener("click", function(e){
+  var b = e.target.closest("button");
+  if (!b || b.dataset.m === curMode) return;
+  curMode = b.dataset.m;
+  document.querySelectorAll("#modeBar button").forEach(function(x){ x.classList.toggle("on", x === b); });
+  document.getElementById("rankWrap").style.display = "none";
+  document.getElementById("doneBtn").disabled = true;
+  document.getElementById("orderBox").innerHTML = '<span class="mut">切换到 [' + M().label + '] 模式,正在拉取…</span>';
+  renderManualInputs(); renderHist();
+  doFetch();
+});
+
+renderManualInputs(); renderHist();
+doFetch();
+
+document.getElementById("guideBtn").onclick = function(){
+  document.getElementById("guideMask").classList.add("open");
+};
+document.getElementById("guideClose").onclick = function(){
+  document.getElementById("guideMask").classList.remove("open");
+};
+document.getElementById("guideMask").onclick = function(e){
+  if (e.target === this) this.classList.remove("open");
+};
+</script>
+</body>
+</html>
