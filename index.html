@@ -327,31 +327,32 @@ function jsonp(url){
   return new Promise(function(resolve, reject){
     var cb = "emcb_" + Math.random().toString(36).slice(2);
     var s = document.createElement("script");
-    window[cb] = function(data){ resolve(data); delete window[cb]; s.remove(); };
-    s.onerror = function(){ reject(new Error("jsonp fail")); delete window[cb]; s.remove(); };
+    var settled = false;
+    window[cb] = function(data){ if (settled) return; settled = true; resolve(data); delete window[cb]; s.remove(); };
+    s.onerror = function(){ if (settled) return; settled = true; reject(new Error("jsonp fail")); delete window[cb]; s.remove(); };
+    setTimeout(function(){ if (settled) return; settled = true; reject(new Error("jsonp timeout")); delete window[cb]; try { s.remove(); } catch(e){} }, 9000);
     s.src = url + "&cb=" + cb;
     document.head.appendChild(s);
   });
 }
 
-function doFetch(){
-  var st = document.getElementById("status");
-  st.textContent = "拉取中…";
-  var moms = {}, prices = {}, pasts = {}, done = 0, fail = 0;
+function fetchT(url, ms){
+  return new Promise(function(resolve, reject){
+    var ctrl = ("AbortController" in window) ? new AbortController() : null;
+    var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); reject(new Error("timeout")); }, ms);
+    fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+      .then(function(r){ clearTimeout(timer); resolve(r); })
+      .catch(function(e){ clearTimeout(timer); reject(e); });
+  });
+}
+function tryOKX(moms, prices, pasts){
+  document.getElementById("status").textContent = "拉取中(OKX,最多等 8 秒)…";
   var items = M().items;
-  function finish(){
-    if (fail > 0){
-      st.innerHTML = '<span class="dn">自动拉取失败(' + fail + ' 个),请用手动模式</span>';
-      document.getElementById("verdictBox").innerHTML = '<span class="dn">[' + M().label + '] 行情拉取失败,请用手动模式。</span>';
-      return;
-    }
-    st.textContent = "更新于 " + new Date().toLocaleString("zh-CN");
-    compute(moms, prices, pasts);
-  }
-  if (curMode === "crypto"){
+  return new Promise(function(resolve){
+    var done = 0, fail = 0;
     for (var i = 0; i < items.length; i++){
       (function(coin){
-        fetch("https://www.okx.com/api/v5/market/candles?instId=" + coin + "-USDT&bar=1D&limit=15")
+        fetchT("https://www.okx.com/api/v5/market/candles?instId=" + coin + "-USDT&bar=1D&limit=15", 8000)
           .then(function(r){ return r.json(); })
           .then(function(j){
             var d = j.data;
@@ -364,11 +365,56 @@ function doFetch(){
             }
           })
           .catch(function(){ fail++; })
-          .then(function(){ done++; if (done === items.length) finish(); });
+          .then(function(){ done++; if (done === items.length) resolve(fail === 0); });
       })(items[i]);
     }
+  });
+}
+function tryGecko(moms, prices, pasts){
+  document.getElementById("status").textContent = "OKX 不通,自动换备用数据源(CoinGecko)…";
+  var ids = { ETH:"ethereum", BTC:"bitcoin", SOL:"solana", BNB:"binancecoin", XRP:"ripple", DOGE:"dogecoin", AVAX:"avalanche-2", LINK:"chainlink" };
+  var items = M().items;
+  var idCsv = [];
+  for (var i = 0; i < items.length; i++) idCsv.push(ids[items[i]]);
+  var url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=" + idCsv.join(",") + "&price_change_percentage=14d";
+  return fetchT(url, 9000).then(function(r){ return r.json(); }).then(function(arr){
+    if (!arr || !arr.length) return false;
+    var got = 0;
+    for (var k = 0; k < arr.length; k++){
+      var c = arr[k], sym = null;
+      for (var key in ids) if (ids[key] === c.id) sym = key;
+      if (!sym || !c.current_price || c.price_change_percentage_14d_in_currency === null || c.price_change_percentage_14d_in_currency === undefined) continue;
+      moms[sym] = c.price_change_percentage_14d_in_currency;
+      prices[sym] = c.current_price;
+      pasts[sym] = c.current_price / (1 + c.price_change_percentage_14d_in_currency / 100);
+      got++;
+    }
+    return got === items.length;
+  }).catch(function(){ return false; });
+}
+function doFetch(){
+  var st = document.getElementById("status");
+  var moms = {}, prices = {}, pasts = {};
+  function manualMode(msg){
+    st.innerHTML = '<span class="dn">' + msg + ',请用下方手动模式</span>';
+    document.getElementById("verdictBox").innerHTML = '<span class="dn">[' + M().label + '] 行情源不通(' + msg + '),滚动到"第一步"用手动模式填动量百分比。</span>';
+  }
+  function finish(){
+    st.textContent = "更新于 " + new Date().toLocaleString("zh-CN");
+    compute(moms, prices, pasts);
+  }
+  if (curMode === "crypto"){
+    tryOKX(moms, prices, pasts).then(function(ok){
+      if (ok){ finish(); return; }
+      tryGecko(moms, prices, pasts).then(function(ok2){
+        if (ok2){ finish(); return; }
+        manualMode("OKX 和备用源都不通(检查 VPN)");
+      });
+    });
   } else {
-    // A-share ETFs via eastmoney JSONP (works despite CORS)
+    st.textContent = "拉取中(东方财富,最多等 9 秒)…";
+    var items = M().items;
+    var done = 0, fail = 0;
     for (var i = 0; i < items.length; i++){
       (function(it){
         var url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + it.id +
@@ -377,7 +423,6 @@ function doFetch(){
           var k = j && j.data && j.data.klines;
           if (!k || k.length < 22){ fail++; }
           else {
-            // rows: date,open,close,high,low,...  ascending by date
             var nowRow = k[k.length - 1].split(",");
             var pastRow = k[k.length - 1 - M().L].split(",");
             var now = parseFloat(nowRow[2]), past = parseFloat(pastRow[2]);
@@ -385,7 +430,10 @@ function doFetch(){
             moms[it.code] = 100 * (now / past - 1);
           }
         }).catch(function(){ fail++; })
-          .then(function(){ done++; if (done === items.length) finish(); });
+          .then(function(){ done++; if (done === items.length){
+            if (fail > 0) manualMode("东方财富接口不通");
+            else finish();
+          } });
       })(items[i]);
     }
   }
