@@ -71,6 +71,11 @@
   <button data-m="cn">A股 · 12 ETF(14个交易日动量)</button>
 </div>
 
+<div id="shortRow" style="display:none; margin-bottom:12px;">
+  <button class="ghost" id="shortToggle" style="width:100%;">空头实验(C):关闭 ← 点击启用</button>
+  <div class="note" id="shortNote" style="display:none;">C 模式 = 多头照旧(前 2 名各 1/2)+ <b>做空动量最差的 2 个币(各 1/4 袖仓,永续合约)</b>。回测五年 +2454% vs 纯多头 +1354%,深熊年 -12.5% vs -31%——但<b>未计资金费,实盘会打折</b>;需要合约账户;资金 ≤ 总资金 2%;每次换仓记资金费;26 周对账跑输纯多头就关。</div>
+</div>
+
 <div class="card" id="verdictCard" style="border-color:#2962ff; background:#1a2033;">
   <h2>🎯 当前指令(打开页面自动判断)<span id="vTime" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
   <div id="verdictBox" class="mut" style="font-size:16px; line-height:2.1;">正在拉取行情…</div>
@@ -129,7 +134,8 @@
     <b>10. 涨停一字板买不进就放弃名额持现金,次日再看,不追。</b><br>
     <b>11. 纳指溢价 &gt; 2% 这周不买,持现金。</b>券商 App 里看"IOPV/溢价率"。<br>
     <b>12. A 股手续费可无视。</b>ETF 无印花税,万元 1~3 元,回测按 0.1% 扣的,实盘只会更好。<br>
-    <b>13. 买不起一手(100 份)的名额跳过,持现金,不凑。</b>黄金一手约 890 元、沪深300 约 400 元——袖仓 ≥ 3000 元才能保证 12 只都买得起;选券商要选"免五"账户(无最低 5 元佣金),否则小额会被佣金吃光。
+    <b>13. 买不起一手(100 份)的名额跳过,持现金,不凑。</b>黄金一手约 890 元、沪深300 约 400 元——袖仓 ≥ 3000 元才能保证 12 只都买得起;选券商要选"免五"账户(无最低 5 元佣金),否则小额会被佣金吃光。<br>
+    <b>14. 空头实验(C)三条铁律:</b>只限币圈,资金 ≤ 总资金 2%;永续合约账户,每次换仓台账必须记资金费支出;每 26 周和纯多头模式对账,跑输就关。轧空(暴跌币暴涨)是空头最大风险,深夜插针多发,仓位的 1/4 上限不许突破。
   </div>
 </div>
 
@@ -240,13 +246,21 @@ function compute(moms, prices, pasts){
   rows.sort(function(a,b){ return b.m - a.m; });
   var top3 = [];
   for (var i = 0; i < rows.length && top3.length < M().topN; i++) if (rows[i].m > 0) top3.push(rows[i].c);
+  var shorts = [];
+  if (curMode === "crypto" && ST().shortC){
+    for (var i = rows.length - 1; i >= 0 && shorts.length < 2; i--){ if (rows[i].m < 0) shorts.push(rows[i].c); else break; }
+  }
+  var keyByName = {};
+  for (var i = 0; i < items.length; i++) keyByName[itemName(items[i])] = itemKey(items[i]);
+  curMom._keyByName = keyByName;
   var tb = document.querySelector("#rankT tbody");
   var h = "";
   for (var i = 0; i < rows.length; i++){
     var r = rows[i];
     var instr = "", cls = "cash";
-    if (top3.indexOf(r.c) >= 0){ cls = "buy"; instr = "持有 1/" + M().topN; }
-    else if (r.m > 0){ instr = "不买(前3之外)"; }
+    if (top3.indexOf(r.c) >= 0){ cls = "buy"; instr = "持多 1/" + M().topN; }
+    else if (shorts.indexOf(r.c) >= 0){ cls = "dn"; instr = "做空 1/4"; }
+    else if (r.m > 0){ instr = "不买(名额之外)"; }
     else { instr = "负动量·现金"; }
     h += "<tr><td><b>" + r.c + "</b></td><td>" + (r.p ? fmt(r.p, r.p < 1 ? 4 : 2) : "—") + "</td><td class='mut'>" + (r.q ? fmt(r.q, r.q < 1 ? 4 : 2) : "—") + "</td>" +
       "<td class='" + (r.m >= 0 ? "up" : "dn") + "'>" + (r.m >= 0 ? "+" : "") + r.m.toFixed(1) + "%</td><td>" + (i + 1) + "</td>" +
@@ -254,32 +268,37 @@ function compute(moms, prices, pasts){
   }
   tb.innerHTML = h;
   document.getElementById("rankWrap").style.display = "block";
-  renderOrder(top3);
-  renderVerdict(top3);
   curMom._top3 = top3;
+  curMom._shorts = shorts;
+  renderOrder(top3, shorts);
+  renderVerdict(top3, shorts);
   document.getElementById("doneBtn").disabled = false;
 }
 
-function renderOrder(top3){
+function renderOrder(top3, shorts){
   var box = document.getElementById("orderBox");
   var daily = "";
   var lw = ST().lastWeek;
   if (lw && lw.hold && lw.hold.length){
-    daily += '<div style="border-top:1px solid #2a2e39;margin-top:8px;padding-top:6px;font-size:13px;"><b>每日快检</b>(持仓动量转负 → 当天卖出,等周度补位): ';
-    var negs = [];
+    daily += '<div style="border-top:1px solid #2a2e39;margin-top:8px;padding-top:6px;font-size:13px;"><b>每日快检</b>(多头动量转负→当天卖出;空头动量转正→当天平空): ';
+    var negs = [], hk = lw.holdKeys || [];
     for (var i = 0; i < lw.hold.length; i++){
-      var c = lw.hold[i], m = curMom ? curMom[c] : null;
+      var c = lw.hold[i], m = curMom ? curMom[hk[i] || c] : null;
       if (m === null || m === undefined) continue;
       daily += c + ' <span class="' + (m > 0 ? 'up' : 'dn') + '">' + (m >= 0 ? '+' : '') + m.toFixed(1) + '%</span> &nbsp;';
       if (m <= 0) negs.push(c);
     }
     daily += '</div>';
     if (negs.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应卖出:' + negs.join("、") + '</b></div>';
-    else daily += '<div class="up" style="font-size:13px;">持仓动量均为正,今日不动。</div>';
-  }
-  if (!top3 || top3.length === 0){
-    box.innerHTML = '<span class="dn">全员负动量 → <b>全部持现金</b>,等下周。</span>' + daily;
-    return;
+    else if (lw.hold.length) daily += '<div class="up" style="font-size:13px;">多头持仓动量均为正,今日不动。</div>';
+    var sk = lw.shortKeys || [], sq = [];
+    for (var i = 0; i < (lw.shorts || []).length; i++){
+      var c2 = lw.shorts[i], m2 = curMom ? curMom[sk[i] || c2] : null;
+      if (m2 === null || m2 === undefined) continue;
+      daily += '[空]' + c2 + ' <span class="' + (m2 < 0 ? 'up' : 'dn') + '">' + (m2 >= 0 ? '+' : '') + m2.toFixed(1) + '%</span> &nbsp;';
+      if (m2 >= 0) sq.push(c2);
+    }
+    if (sq.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应平空(买回):' + sq.join("、") + '</b></div>';
   }
   var last = lw ? lw.hold : [];
   var buys = [], sells = [], keeps = [];
@@ -291,27 +310,40 @@ function renderOrder(top3){
   if (buys.length) h += '<div class="up">买入:' + buys.join("、") + '(' + M().unitNote + ')</div>';
   if (keeps.length) h += '<div style="color:#7f9bff">继续持有:' + keeps.join("、") + '(不动)</div>';
   if (top3.length < M().topN) h += '<div class="am">只有 ' + top3.length + ' 个正动量标的 → 其余 ' + (M().topN - top3.length) + '/' + M().topN + ' 持现金。</div>';
-  h += '<div class="mut" style="font-size:12px;margin-top:4px;">本周组合:' + (top3.join(" / ") || "全现金") + '</div>';
+  h += '<div class="mut" style="font-size:12px;margin-top:4px;">本周多头:' + (top3.join(" / ") || "全现金") + '</div>';
   box.innerHTML = h + daily;
 }
 
-function renderVerdict(top3){
+function renderVerdict(top3, shorts){
   var box = document.getElementById("verdictBox");
-  var last = ST().lastWeek ? ST().lastWeek.hold : [];
+  var lw = ST().lastWeek;
+  var last = lw ? lw.hold : [];
+  var lwShorts = lw ? (lw.shorts || []) : [];
   document.getElementById("vTime").textContent = new Date().toLocaleString("zh-CN");
   var cashSlots = M().topN - top3.length;
+  var shortOn = (curMode === "crypto" && ST().shortC);
   var h = "";
-  h += '<div><span class="tag ' + (top3.length === 3 ? "buy" : "cash") + '" style="font-size:13px;">当前状态[' + M().label + ']:' +
-    (top3.length === 0 ? "全现金" : "持 " + top3.length + "/" + M().topN + " 仓" + (cashSlots > 0 ? "(" + cashSlots + " 仓现金)" : "")) + '</span>' +
-    (top3.length ? ' <b style="font-size:15px;">' + top3.join(" · ") + '</b>' : "") + "</div>";
+  h += '<div><span class="tag ' + (top3.length === M().topN ? "buy" : "cash") + '" style="font-size:13px;">当前状态[' + M().label + ']:' +
+    (top3.length === 0 ? "多头全现金" : "多 " + top3.length + "/" + M().topN + " 仓" + (cashSlots > 0 ? "(" + cashSlots + " 仓现金)" : "")) + '</span>' +
+    (shortOn && shorts.length ? ' <span class="tag dn" style="font-size:13px;">空 ' + shorts.length + '/2 仓</span>' : "") +
+    (top3.length || shorts.length ? ' <b style="font-size:15px;">' + (top3.concat(shorts).join(" · ")) + '</b>' : "") + "</div>";
   var enters = [], exits = [];
   for (var i = 0; i < top3.length; i++) if (last.indexOf(top3[i]) < 0) enters.push(top3[i]);
   for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) exits.push(last[i]);
+  var openS = [], closeS = [];
+  if (shortOn){
+    for (var i = 0; i < shorts.length; i++) if (lwShorts.indexOf(shorts[i]) < 0) openS.push(shorts[i]);
+    for (var i = 0; i < lwShorts.length; i++) if (shorts.indexOf(lwShorts[i]) < 0) closeS.push(lwShorts[i]);
+  }
   h += enters.length ? '<div class="up" style="font-size:17px;">【入场】买 ' + enters.join("、") + '(' + M().unitNote + ')</div>'
                      : '<div class="mut">【入场】无新买入' + (top3.length ? "(持仓已在榜)" : "(无正动量,不上场)") + "</div>";
-  h += exits.length ? '<div class="dn" style="font-size:17px;">【离场】卖 ' + exits.join("、") + "(掉出前3/动量转负)</div>"
-                    : '<div class="mut">【离场】无(持仓动量均为正)</div>';
-  var lw = ST().lastWeek;
+  if (shortOn) h += openS.length ? '<div class="dn" style="font-size:17px;">【做空】空 ' + openS.join("、") + '(各 1/4 袖仓,永续合约)</div>'
+                     : '<div class="mut">【做空】无新空单' + (shorts.length ? "(空单已在榜)" : "") + "</div>";
+  var exitParts = [];
+  if (exits.length) exitParts.push('卖 ' + exits.join("、") + "(掉出榜/动量转负)");
+  if (closeS.length) exitParts.push('平空 ' + closeS.join("、"));
+  h += exitParts.length ? '<div class="dn" style="font-size:17px;">【离场】' + exitParts.join(";") + "</div>"
+                        : '<div class="mut">【离场】无(持仓动量均正常)</div>';
   if (lw && lw.date){
     var next = new Date(lw.date + "T00:00:00Z");
     next.setUTCDate(next.getUTCDate() + 7);
@@ -457,8 +489,11 @@ document.getElementById("doneBtn").onclick = function(){
   var snap = [];
   var items = M().items;
   for (var i = 0; i < items.length; i++) snap.push(itemName(items[i]) + " " + (curMom[itemKey(items[i])] >= 0 ? "+" : "") + curMom[itemKey(items[i])].toFixed(0) + "%");
-  ST().lastWeek = { date: new Date().toISOString().slice(0, 10), hold: curMom._top3.slice() };
-  ST().hist.unshift({ date: ST().lastWeek.date, hold: curMom._top3.join("+") || "现金", snap: snap.join(", "), val: isNaN(val) ? "" : val });
+  ST().lastWeek = { date: new Date().toISOString().slice(0, 10), hold: curMom._top3.slice(),
+    holdKeys: (function(){ var a = [], kbn = curMom._keyByName || {}; for (var i = 0; i < curMom._top3.length; i++) a.push(kbn[curMom._top3[i]] || curMom._top3[i]); return a; })(),
+    shorts: (curMom._shorts || []).slice(),
+    shortKeys: (function(){ var a = [], kbn = curMom._keyByName || {}, s = curMom._shorts || []; for (var i = 0; i < s.length; i++) a.push(kbn[s[i]] || s[i]); return a; })() };
+  ST().hist.unshift({ date: ST().lastWeek.date, hold: (curMom._top3.join("+") || "现金多仓") + (curMom._shorts && curMom._shorts.length ? " | 空:" + curMom._shorts.join("+") : ""), snap: snap.join(", "), val: isNaN(val) ? "" : val });
   if (ST().hist.length > 200) ST().hist.pop();
   save(); renderHist();
   document.getElementById("orderBox").innerHTML += '<div class="up" style="margin-top:6px;">✅ 已记录。下周同一时间再来。</div>';
@@ -484,6 +519,7 @@ document.getElementById("modeBar").addEventListener("click", function(e){
   if (!b || b.dataset.m === curMode) return;
   curMode = b.dataset.m;
   document.querySelectorAll("#modeBar button").forEach(function(x){ x.classList.toggle("on", x === b); });
+  document.getElementById("shortRow").style.display = (curMode === "crypto") ? "block" : "none";
   document.getElementById("rankWrap").style.display = "none";
   document.getElementById("doneBtn").disabled = true;
   document.getElementById("orderBox").innerHTML = '<span class="mut">切换到 [' + M().label + '] 模式,正在拉取…</span>';
@@ -492,6 +528,18 @@ document.getElementById("modeBar").addEventListener("click", function(e){
 });
 
 renderManualInputs(); renderHist();
+if (S.crypto.shortC){
+  document.getElementById("shortToggle").textContent = "空头实验(C):开启 ← 点击关闭";
+  document.getElementById("shortNote").style.display = "block";
+  document.getElementById("shortRow").style.display = "block";
+}
+document.getElementById("shortToggle").onclick = function(){
+  S.crypto.shortC = !S.crypto.shortC;
+  save();
+  this.textContent = S.crypto.shortC ? "空头实验(C):开启 ← 点击关闭" : "空头实验(C):关闭 ← 点击启用";
+  document.getElementById("shortNote").style.display = S.crypto.shortC ? "block" : "none";
+  if (curMom){ compute(curMom, null, null); }
+};
 doFetch();
 
 document.getElementById("guideBtn").onclick = function(){
