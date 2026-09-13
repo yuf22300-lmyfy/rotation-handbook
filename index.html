@@ -311,6 +311,20 @@ function renderOrder(top3, shorts){
   if (keeps.length) h += '<div style="color:#7f9bff">继续持有:' + keeps.join("、") + '(不动)</div>';
   if (top3.length < M().topN) h += '<div class="am">只有 ' + top3.length + ' 个正动量标的 → 其余 ' + (M().topN - top3.length) + '/' + M().topN + ' 持现金。</div>';
   h += '<div class="mut" style="font-size:12px;margin-top:4px;">本周多头:' + (top3.join(" / ") || "全现金") + '</div>';
+  var hs = "";
+  var shorts = shorts || [];
+  var lwS = lw ? (lw.shorts || []) : [];
+  var openS = [], closeS = [], keepS = [];
+  for (var i = 0; i < shorts.length; i++) (lwS.indexOf(shorts[i]) >= 0 ? keepS : openS).push(shorts[i]);
+  for (var i = 0; i < lwS.length; i++) if (shorts.indexOf(lwS[i]) < 0) closeS.push(lwS[i]);
+  if (shorts.length){
+    if (closeS.length) hs += '<div class="up">平空(买回):' + closeS.join("、") + '</div>';
+    if (openS.length) hs += '<div class="dn">开空:' + openS.join("、") + '(各 1/4 袖仓,永续合约)</div>';
+    if (keepS.length) hs += '<div style="color:#b39ddb">空单续持:' + keepS.join("、") + '(不动)</div>';
+    h += hs;
+  } else if (lwS.length){
+    h += '<div class="up">平空(买回):' + lwS.join("、") + '(无可空标的,空头撤退)</div>';
+  }
   box.innerHTML = h + daily;
 }
 
