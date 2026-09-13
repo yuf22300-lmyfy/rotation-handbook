@@ -61,7 +61,7 @@
 </style>
 </head>
 <body>
-<h1>轮动手册 <span style="font-size:11px; color:#787b86; font-weight:400;">v2.3 · 2026-09-13</span></h1>
+<h1>轮动手册 <span style="font-size:11px; color:#787b86; font-weight:400;">v2.4 · 2026-09-14</span></h1>
 <div class="sub" id="subLine">横截面动量 + 现金阀 + 每日负动量退出 · 币圈:前 2 名各 1/2 · A股:前 3 名各 1/3 · 缺额持现金 · <b>每天快检 1 分钟 + 每周固定日换仓</b> · 1 倍无杠杆</div>
 
 <button id="guideBtn">📖 傻瓜说明书(第一次用,先点这个)</button>
@@ -280,26 +280,40 @@ function renderOrder(top3, shorts){
   var box = document.getElementById("orderBox");
   var daily = "";
   var lw = ST().lastWeek;
-  if (lw && lw.hold && lw.hold.length){
+  var shortOn = (curMode === "crypto" && ST().shortC);
+  var hasHold = lw && lw.hold && lw.hold.length;
+  var hasShorts = lw && lw.shorts && lw.shorts.length;
+  if (lw && (hasHold || hasShorts)){
     daily += '<div style="border-top:1px solid #2a2e39;margin-top:8px;padding-top:6px;font-size:13px;"><b>每日快检</b>(多头动量转负→当天卖出;空头动量转正→当天平空): ';
     var negs = [], hk = lw.holdKeys || [];
-    for (var i = 0; i < lw.hold.length; i++){
-      var c = lw.hold[i], m = curMom ? curMom[hk[i] || c] : null;
-      if (m === null || m === undefined) continue;
-      daily += c + ' <span class="' + (m > 0 ? 'up' : 'dn') + '">' + (m >= 0 ? '+' : '') + m.toFixed(1) + '%</span> &nbsp;';
-      if (m <= 0) negs.push(c);
+    if (hasHold){
+      for (var i = 0; i < lw.hold.length; i++){
+        var c = lw.hold[i], m = curMom ? curMom[hk[i] || c] : null;
+        if (m === null || m === undefined) continue;
+        daily += c + ' <span class="' + (m > 0 ? 'up' : 'dn') + '">' + (m >= 0 ? '+' : '') + m.toFixed(1) + '%</span> &nbsp;';
+        if (m <= 0) negs.push(c);
+      }
+    } else {
+      daily += '<span class="mut">多头空仓</span> &nbsp;';
     }
     daily += '</div>';
     if (negs.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应卖出:' + negs.join("、") + '</b></div>';
-    else if (lw.hold.length) daily += '<div class="up" style="font-size:13px;">多头持仓动量均为正,今日不动。</div>';
+    else if (hasHold) daily += '<div class="up" style="font-size:13px;">多头持仓动量均为正,今日不动。</div>';
     var sk = lw.shortKeys || [], sq = [];
-    for (var i = 0; i < (lw.shorts || []).length; i++){
-      var c2 = lw.shorts[i], m2 = curMom ? curMom[sk[i] || c2] : null;
-      if (m2 === null || m2 === undefined) continue;
-      daily += '[空]' + c2 + ' <span class="' + (m2 < 0 ? 'up' : 'dn') + '">' + (m2 >= 0 ? '+' : '') + m2.toFixed(1) + '%</span> &nbsp;';
-      if (m2 >= 0) sq.push(c2);
+    if (hasShorts){
+      daily += '<div style="font-size:13px;">空头监控: ';
+      for (var i = 0; i < lw.shorts.length; i++){
+        var c2 = lw.shorts[i], m2 = curMom ? curMom[sk[i] || c2] : null;
+        if (m2 === null || m2 === undefined) continue;
+        daily += '[空]' + c2 + ' <span class="' + (m2 < 0 ? 'up' : 'dn') + '">' + (m2 >= 0 ? '+' : '') + m2.toFixed(1) + '%</span> &nbsp;';
+        if (m2 >= 0) sq.push(c2);
+      }
+      daily += '</div>';
+      if (sq.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应平空(买回):' + sq.join("、") + '</b></div>';
+      else daily += '<div class="up" style="font-size:13px;">空头标的动量均为负,空单持有不动。</div>';
+    } else if (shortOn){
+      daily += '<div class="am" style="font-size:13px;">空头:台账无空单记录(上周记录时未开C模式或无可空标的)。本周日换仓时开着C模式点"已记录",快检即自动监控空单。</div>';
     }
-    if (sq.length) daily += '<div class="dn" style="font-size:14px;"><b>今日应平空(买回):' + sq.join("、") + '</b></div>';
   }
   var last = lw ? lw.hold : [];
   var buys = [], sells = [], keeps = [];
@@ -511,7 +525,9 @@ document.getElementById("doneBtn").onclick = function(){
   ST().hist.unshift({ date: ST().lastWeek.date, hold: (curMom._top3.join("+") || "现金多仓") + (curMom._shorts && curMom._shorts.length ? " | 空:" + curMom._shorts.join("+") : ""), snap: snap.join(", "), val: isNaN(val) ? "" : val });
   if (ST().hist.length > 200) ST().hist.pop();
   save(); renderHist();
-  document.getElementById("orderBox").innerHTML += '<div class="up" style="margin-top:6px;">✅ 已记录。下周同一时间再来。</div>';
+  renderOrder(curMom._top3.slice(), (curMom._shorts || []).slice());
+  renderVerdict(curMom._top3.slice(), (curMom._shorts || []).slice());
+  document.getElementById("orderBox").innerHTML += '<div class="up" style="margin-top:6px;">✅ 已记录,上方快检已切换为监控本周新持仓。下周同一时间再来。</div>';
 };
 
 function renderHist(){
