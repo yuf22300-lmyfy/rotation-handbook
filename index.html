@@ -592,6 +592,7 @@ document.getElementById("guideMask").onclick = function(e){
 };
 
 // ===== 自动机器人同步 (数据由电脑上的轮动机器人每次运行后推送) =====
+var BOT_API = "https://api.github.com/repos/yuf22300-lmyfy/rotation-handbook/contents/_bot/r9t4w7q2.json";
 var BOT_RAW = "https://raw.githubusercontent.com/yuf22300-lmyfy/rotation-handbook/main/_bot/r9t4w7q2.json";
 var botData = null;
 var botPx = {};
@@ -632,7 +633,7 @@ function botRender(){
   if (!botData) return;
   document.getElementById("botCard").style.display = "block";
   var d = botData;
-  document.getElementById("botSync").textContent = "数据 " + (d.ts || "?") + " UTC · 页面每 60 秒自动刷新";
+  document.getElementById("botSync").textContent = "数据 " + (d.ts || "?") + " UTC · 行情 60 秒 / 机器人数据 3 分钟自动刷新";
   var lv = 0, sv = 0, supl = 0, lupl = 0;
   (d.longs || []).forEach(function(L){ var p = botPx[L.c] || L.cost; lv += p * L.q; lupl += (p - L.cost) * L.q; });
   (d.shorts || []).forEach(function(S){ var p2 = botPx[S.c] || S.entry; sv += S.entry * S.q; supl += (S.entry - p2) * S.q; });
@@ -665,8 +666,16 @@ function botRender(){
     document.getElementById("botHistT").querySelector("tbody").innerHTML = tr;
   }
 }
+function botGetData(){
+  return botFetch(BOT_API, 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
+    .then(function(j){
+      if (!j || !j.content) throw new Error("no content");
+      return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, "")))));
+    });
+}
 function botSync(){
-  botFetch(BOT_RAW, 9000).then(function(r){ if (!r.ok) throw new Error("http " + r.status); return r.json(); })
+  botGetData()
+    .catch(function(){ return botFetch(BOT_RAW, 9000).then(function(r){ if (!r.ok) throw new Error("raw " + r.status); return r.json(); }); })
     .then(function(j){ botData = j; return botFetchPrices(); })
     .then(botRender)
     .catch(function(){
@@ -676,7 +685,8 @@ function botSync(){
     });
 }
 botSync();
-setInterval(botSync, 60000);
+setInterval(botSync, 180000);
+setInterval(function(){ if (botData) botFetchPrices().then(botRender); }, 60000);
 </script>
 </body>
 </html>
