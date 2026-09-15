@@ -49,6 +49,13 @@
   #guideBox .gup{color:var(--green); font-weight:600;} #guideBox .gdn{color:var(--red); font-weight:600;}
   #guideClose{float:right; background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 12px; cursor:pointer;}
   #guideBtn{background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:6px; padding:6px 14px; cursor:pointer; font-size:13px; margin-bottom:12px; width:100%;}
+  .botChips{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 2px;}
+  .chip{border-radius:8px; padding:5px 12px; font-size:12px; color:var(--muted); background:#131722; border:1px solid var(--border);}
+  .chip b{font-size:15px; margin-left:4px;}
+  .botCharts{display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;}
+  .botChartBox{flex:1 1 280px; background:#131722; border:1px solid var(--border); border-radius:8px; padding:10px 12px;}
+  .botChartTitle{font-size:12px; color:var(--muted); margin-bottom:6px;}
+  #botPosT tbody tr:hover, #botHistT tbody tr:hover{background:#232836;}
   @media (max-width:600px){
     body{padding:10px 10px 24px; font-size:13px;}
     .card{padding:10px 12px; border-radius:8px;}
@@ -85,8 +92,12 @@
   <h2>🤖 自动机器人实况<span id="botSync" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
   <div id="botSummary" class="mut">等待机器人推送数据…</div>
   <table class="hist" id="botPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓</th><th>方向</th><th>数量</th><th>开仓价</th><th>现价</th><th>浮盈浮亏</th></tr></thead><tbody></tbody></table>
-  <div id="botHistHead" style="margin-top:10px; display:none;" class="note"><b>机器人台账(最近动作)</b></div>
-  <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(UTC)</th><th>动作</th><th>标的</th><th>数量</th><th>价格</th><th>现金</th></tr></thead><tbody></tbody></table>
+  <div class="botCharts" id="botCharts" style="display:none;">
+    <div class="botChartBox"><div class="botChartTitle">每笔已实现盈亏 (USDT, 含手续费估算)</div><div id="botChartBars"></div></div>
+    <div class="botChartBox"><div class="botChartTitle">累计已实现盈亏 (USDT)</div><div id="botChartLine"></div></div>
+  </div>
+  <div id="botHistHead" style="margin-top:12px; display:none;" class="note"><b>交易流水</b></div>
+  <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(本地)</th><th>操作</th><th>币</th><th>数量</th><th>价格</th><th>动作后现金</th><th>本笔盈亏</th></tr></thead><tbody></tbody></table>
 </div>
 
 <div class="card">
@@ -629,6 +640,83 @@ function botAct(a){
   if (a === "REBASE") return '<span class="mut">空头资金重定位</span>';
   return a;
 }
+function botLocalTime(utcStr){
+  var d = new Date(String(utcStr).replace(" ", "T") + ":00Z");
+  if (isNaN(d.getTime())) return utcStr;
+  var p2 = function(n){ return (n < 10 ? "0" : "") + n; };
+  return p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+}
+function botReplay(){
+  var out = { rows: [], cum: [0], realized: 0 };
+  if (!botData || !botData.tail) return out;
+  var cost = {}, qty = {};
+  for (var i = 0; i < botData.tail.length; i++){
+    var f = String(botData.tail[i]).split(",");
+    if (f.length < 7) continue;
+    var a = f[3], c = f[2], q = parseFloat(f[4]), p = parseFloat(f[5]);
+    if (isNaN(q) || isNaN(p)) continue;
+    var pnl = null;
+    if (a.indexOf("BUY") === 0){ qty[c] = (qty[c] || 0) + q; cost[c] = (cost[c] || 0) + q * p / 0.999; }
+    else if (a.indexOf("SELL") === 0){
+      var have = qty[c] || 0;
+      if (have > 0){
+        var avg = cost[c] / have;
+        pnl = q * p * 0.999 - q * avg;
+        var sold = Math.min(q, have);
+        qty[c] = have - sold; cost[c] = cost[c] - avg * sold;
+      }
+    }
+    else if (a.indexOf("COVER") === 0){
+      var e = parseFloat(f[7]);
+      if (!isNaN(e)) pnl = (e - p) * q - 0.001 * q * p;
+    }
+    if (pnl !== null){ out.realized += pnl; out.cum.push(Math.round(out.realized * 100) / 100); }
+    out.rows.push({ raw: f, pnl: pnl });
+  }
+  return out;
+}
+function botSvgBars(trades){
+  if (!trades.length) return '<div class="mut" style="font-size:12px; padding:20px 0; text-align:center;">还没有已平仓的交易</div>';
+  var W = 560, H = 170, mid = H / 2, padX = 18, gap = 10;
+  var bw = Math.max(14, Math.min(52, (W - padX * 2 - gap * (trades.length - 1)) / trades.length));
+  var mx = 1;
+  trades.forEach(function(t){ mx = Math.max(mx, Math.abs(t.pnl)); });
+  var sc = (mid - 26) / mx;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;">';
+  s += '<line x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '" stroke="#2a2e39" stroke-width="1"/>';
+  var x = padX;
+  trades.forEach(function(t){
+    var hgt = Math.max(2, Math.abs(t.pnl) * sc);
+    var up = t.pnl >= 0;
+    s += '<rect x="' + x + '" y="' + (up ? mid - hgt : mid) + '" width="' + bw + '" height="' + hgt + '" rx="2" fill="' + (up ? "#26a69a" : "#ef5350") + '" opacity=".85"><title>' + t.label + '  ' + (up ? "+" : "") + t.pnl.toFixed(2) + ' USDT</title></rect>';
+    s += '<text x="' + (x + bw / 2) + '" y="' + (up ? mid - hgt - 5 : mid + hgt + 11) + '" font-size="10" fill="#787b86" text-anchor="middle">' + t.label + '</text>';
+    x += bw + gap;
+  });
+  s += '</svg>';
+  return s;
+}
+function botSvgLine(cum){
+  if (cum.length < 2) return '<div class="mut" style="font-size:12px; padding:20px 0; text-align:center;">还没有已实现盈亏数据</div>';
+  var W = 560, H = 170, padX = 22, padT = 14, padB = 20;
+  var mn = Math.min.apply(null, cum), mx = Math.max.apply(null, cum);
+  if (mx - mn < 0.5){ mx += 0.25; mn -= 0.25; }
+  var n = cum.length;
+  var X = function(i){ return padX + (W - padX * 2) * (n === 1 ? 0.5 : i / (n - 1)); };
+  var Y = function(v){ return padT + (H - padT - padB) * (1 - (v - mn) / (mx - mn)); };
+  var up = cum[n - 1] >= 0;
+  var col = up ? "#26a69a" : "#ef5350";
+  var pts = "", area = "M" + X(0) + "," + (H - padB);
+  for (var i = 0; i < n; i++){ pts += (i ? " " : "") + X(i).toFixed(1) + "," + Y(cum[i]).toFixed(1); area += " L" + X(i).toFixed(1) + "," + Y(cum[i]).toFixed(1); }
+  area += " L" + X(n - 1).toFixed(1) + "," + (H - padB) + " Z";
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;">';
+  if (mn <= 0 && mx >= 0) s += '<line x1="0" y1="' + Y(0).toFixed(1) + '" x2="' + W + '" y2="' + Y(0).toFixed(1) + '" stroke="#2a2e39" stroke-width="1"/>';
+  s += '<path d="' + area + '" fill="' + col + '" opacity=".08"/>';
+  s += '<polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="2"/>';
+  for (var j = 0; j < n; j++) s += '<circle cx="' + X(j).toFixed(1) + '" cy="' + Y(cum[j]).toFixed(1) + '" r="2.6" fill="' + col + '"><title>第 ' + j + ' 笔后累计 ' + (cum[j] >= 0 ? "+" : "") + cum[j].toFixed(2) + ' USDT</title></circle>';
+  s += '<text x="' + padX + '" y="11" font-size="10" fill="#787b86">' + (cum[n - 1] >= 0 ? "+" : "") + cum[n - 1].toFixed(2) + '</text>';
+  s += '</svg>';
+  return s;
+}
 function botRender(){
   if (!botData) return;
   document.getElementById("botCard").style.display = "block";
@@ -639,8 +727,18 @@ function botRender(){
   (d.shorts || []).forEach(function(S){ var p2 = botPx[S.c] || S.entry; sv += S.entry * S.q; supl += (S.entry - p2) * S.q; });
   var upl = lupl + supl;
   var eq = (d.cash || 0) + lv + sv + supl;
-  var h = '<div style="font-size:15px; line-height:2;">模式:<b>' + d.mode + '</b> · 总权益约 <b>' + fmt(eq) + ' USDT</b> · 浮盈浮亏 <b class="' + (upl >= 0 ? 'up' : 'dn') + '">' + (upl >= 0 ? '+' : '') + fmt(upl) + ' USDT</b> · 可用现金 ' + fmt(d.cash || 0) + '</div>';
-  h += '<div class="mut" style="font-size:12px;">浮盈浮亏按 OKX 实时价计算(空单按开仓价计保证金),不含手续费/资金费,为约数。上次调仓:' + (d.lastWeekly || "尚无") + '</div>';
+  var rep = botReplay();
+  var total = rep.realized + upl;
+  var cls = function(v){ return v >= 0 ? 'up' : 'dn'; };
+  var sgn = function(v){ return (v >= 0 ? '+' : '') + fmt(v); };
+  var h = '<div class="botChips">';
+  h += '<div class="chip">总盈亏<b class="' + cls(total) + '">' + sgn(total) + '</b>USDT</div>';
+  h += '<div class="chip">已实现<b class="' + cls(rep.realized) + '">' + sgn(rep.realized) + '</b></div>';
+  h += '<div class="chip">浮动(未实现)<b class="' + cls(upl) + '">' + sgn(upl) + '</b></div>';
+  h += '<div class="chip">总权益约<b style="color:#d1d4dc">' + fmt(eq) + '</b></div>';
+  h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + fmt(d.cash || 0) + '</b></div>';
+  h += '</div>';
+  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。买回同币按买入均价算成本。</div>';
   document.getElementById("botSummary").innerHTML = h;
   var rows = "";
   (d.longs || []).forEach(function(L){
@@ -654,16 +752,24 @@ function botRender(){
   var pt = document.getElementById("botPosT");
   pt.style.display = "table";
   pt.querySelector("tbody").innerHTML = rows || '<tr><td colspan="6" class="mut">当前无持仓(全现金)</td></tr>';
+  var trades = [];
   var tr = "";
-  (d.tail || []).forEach(function(line){
-    var f = line.split(",");
-    if (f.length < 7) return;
-    tr += "<tr><td>" + f[0] + "</td><td>" + botAct(f[3]) + "</td><td><b>" + f[2] + "</b></td><td>" + f[4] + "</td><td>" + f[5] + "</td><td class='mut'>" + f[6] + "</td></tr>";
+  rep.rows.forEach(function(r){
+    var f = r.raw;
+    tr += "<tr><td>" + botLocalTime(f[0]) + "</td><td>" + botAct(f[3]) + "</td><td><b>" + f[2] + "</b></td><td>" + f[4] + "</td><td>" + f[5] + "</td><td class='mut'>" + f[6] + "</td>";
+    if (r.pnl !== null && r.pnl !== undefined){
+      tr += "<td class='" + (r.pnl >= 0 ? 'up' : 'dn') + "'><b>" + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + "</b></td>";
+      trades.push({ label: f[2] + " " + botLocalTime(f[0]).slice(0, 5), pnl: r.pnl });
+    } else tr += "<td class='mut'>—</td>";
+    tr += "</tr>";
   });
   if (tr){
     document.getElementById("botHistHead").style.display = "block";
     document.getElementById("botHistT").style.display = "table";
     document.getElementById("botHistT").querySelector("tbody").innerHTML = tr;
+    document.getElementById("botCharts").style.display = "flex";
+    document.getElementById("botChartBars").innerHTML = botSvgBars(trades);
+    document.getElementById("botChartLine").innerHTML = botSvgLine(rep.cum);
   }
 }
 function botGetData(){
