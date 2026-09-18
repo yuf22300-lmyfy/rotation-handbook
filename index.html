@@ -226,6 +226,17 @@ try {
     if (old) S.crypto = JSON.parse(old);
   }
 } catch(e){}
+// 旧记录回填买入价(记录日日线收盘,近似值)
+var BF_PX = { "2026-09-13": { "BNB": 718.5, "AVAX": 7.356 } };
+["crypto","cn"].forEach(function(md){
+  var lw = S[md] && S[md].lastWeek;
+  if (lw && lw.hold && lw.hold.length && !lw.holdPx && BF_PX[lw.date]){
+    var bf = BF_PX[lw.date], sv = S[md].sleeve, n = MODES[md].topN;
+    lw.holdPx = lw.hold.map(function(c){ return bf[c] != null ? bf[c] : null; });
+    lw.holdAmt = lw.hold.map(function(){ return (sv > 0 ? Math.round(sv / n) : null); });
+    try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e2){}
+  }
+});
 function save(){ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
 function ST(){ return S[curMode]; }
 function M(){ return MODES[curMode]; }
@@ -261,6 +272,9 @@ function compute(moms, prices, pasts){
   var keyByName = {};
   for (var i = 0; i < items.length; i++) keyByName[itemName(items[i])] = itemKey(items[i]);
   curMom._keyByName = keyByName;
+  var pxByName = {};
+  for (var i = 0; i < rows.length; i++) if (rows[i].p) pxByName[rows[i].c] = rows[i].p;
+  curMom._pxByName = pxByName;
   var tb = document.querySelector("#rankT tbody");
   var h = "";
   for (var i = 0; i < rows.length; i++){
@@ -369,6 +383,27 @@ var cashSlots = M().topN - top3.length;
     (top3.length === 0 ? "多头全现金" : "多 " + top3.length + "/" + M().topN + " 仓" + (cashSlots > 0 ? "(" + cashSlots + " 仓现金)" : "")) + '</span>' +
     (shortOn && shorts.length ? ' <span class="tag dn" style="font-size:13px;">空 ' + shorts.length + '/2 仓</span>' : "") +
     (top3.length || shorts.length ? ' <b style="font-size:15px;">' + (top3.concat(shorts).join(" · ")) + '</b>' : "") + "</div>";
+  var u = (curMode === "crypto" ? "U" : "元");
+  var pxMap = curMom._pxByName || {};
+  var posRows = [];
+  for (var i = 0; i < last.length; i++) posRows.push({ c: last[i], d: 1, cur: pxMap[last[i]] != null ? pxMap[last[i]] : null, ent: lw && lw.holdPx ? lw.holdPx[i] : null, amt: lw && lw.holdAmt ? lw.holdAmt[i] : null });
+  for (var i = 0; i < lwShorts.length; i++) posRows.push({ c: lwShorts[i], d: -1, cur: pxMap[lwShorts[i]] != null ? pxMap[lwShorts[i]] : null, ent: lw && lw.shortPx ? lw.shortPx[i] : null, amt: lw && lw.shortAmt ? lw.shortAmt[i] : null });
+  if (posRows.length){
+    h += '<div style="margin-top:8px;border-top:1px dashed #3a3f4d;padding-top:6px;">' +
+      '<div style="font-size:11px;color:#8f94a3;margin-bottom:3px;">当前持仓明细(买价=记录换仓时的价格;"—"=旧记录未存买价,下次换仓起自动记录)</div>' +
+      '<table class="hist" style="font-size:12px;"><thead><tr><th>持仓</th><th>投入</th><th>买入价</th><th>现价</th><th>利润</th><th>利润%</th></tr></thead><tbody>';
+    for (var i = 0; i < posRows.length; i++){
+      var pr = posRows[i], pnl = null, pct = null;
+      if (pr.ent && pr.cur && pr.amt){ pct = (pr.cur / pr.ent - 1) * 100 * pr.d; pnl = (pr.cur - pr.ent) / pr.ent * pr.amt * pr.d; }
+      h += "<tr><td><b>" + (pr.d < 0 ? "[空] " : "") + pr.c + "</b></td>" +
+        "<td>" + (pr.amt != null ? pr.amt + " " + u : "—") + "</td>" +
+        "<td>" + (pr.ent != null ? fmt(pr.ent, pr.ent < 1 ? 4 : 2) : "—") + "</td>" +
+        "<td>" + (pr.cur != null ? fmt(pr.cur, pr.cur < 1 ? 4 : 2) : "—") + "</td>" +
+        "<td class='" + (pnl == null ? "mut" : pnl >= 0 ? "up" : "dn") + "'>" + (pnl == null ? "—" : (pnl >= 0 ? "+" : "") + pnl.toFixed(1) + " " + u) + "</td>" +
+        "<td class='" + (pct == null ? "mut" : pct >= 0 ? "up" : "dn") + "'>" + (pct == null ? "—" : (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") + "</td></tr>";
+    }
+    h += "</tbody></table></div>";
+  }
   var enters = [], exits = [];
   for (var i = 0; i < top3.length; i++) if (last.indexOf(top3[i]) < 0) enters.push(top3[i]);
   for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) exits.push(last[i]);
@@ -528,13 +563,40 @@ document.getElementById("manualBtn").onclick = function(){
 document.getElementById("doneBtn").onclick = function(){
   if (!curMom || !curMom._top3) return;
   var val = parseFloat(document.getElementById("sleeveVal").value);
+  var oldLW = ST().lastWeek || {};
+  var oldPx = {}, oldAmt = {};
+  for (var j = 0; j < (oldLW.hold || []).length; j++){
+    var ok = (oldLW.holdKeys || oldLW.hold)[j];
+    if (oldLW.holdPx) oldPx[ok] = oldLW.holdPx[j];
+    if (oldLW.holdAmt) oldAmt[ok] = oldLW.holdAmt[j];
+  }
+  var oldPxS = {}, oldAmtS = {};
+  for (var j = 0; j < (oldLW.shorts || []).length; j++){
+    var ok = (oldLW.shortKeys || oldLW.shorts)[j];
+    if (oldLW.shortPx) oldPxS[ok] = oldLW.shortPx[j];
+    if (oldLW.shortAmt) oldAmtS[ok] = oldLW.shortAmt[j];
+  }
+  var kbn = curMom._keyByName || {}, pmap = curMom._pxByName || {};
+  var newKeys = [], newPx = [], newAmt = [], sKeys = [], sPx = [], sAmt = [];
+  for (var i = 0; i < curMom._top3.length; i++){
+    var k = kbn[curMom._top3[i]] || curMom._top3[i];
+    newKeys.push(k);
+    newPx.push(oldPx[k] != null ? oldPx[k] : (pmap[curMom._top3[i]] != null ? pmap[curMom._top3[i]] : null));
+    newAmt.push(oldAmt[k] != null ? oldAmt[k] : (!isNaN(val) && val > 0 ? Math.round(val / M().topN) : null));
+  }
+  var sArr = curMom._shorts || [];
+  for (var i = 0; i < sArr.length; i++){
+    var k = kbn[sArr[i]] || sArr[i];
+    sKeys.push(k);
+    sPx.push(oldPxS[k] != null ? oldPxS[k] : (pmap[sArr[i]] != null ? pmap[sArr[i]] : null));
+    sAmt.push(oldAmtS[k] != null ? oldAmtS[k] : (!isNaN(val) && val > 0 ? Math.round(val / 4) : null));
+  }
   var snap = [];
   var items = M().items;
   for (var i = 0; i < items.length; i++) snap.push(itemName(items[i]) + " " + (curMom[itemKey(items[i])] >= 0 ? "+" : "") + curMom[itemKey(items[i])].toFixed(0) + "%");
   ST().lastWeek = { date: new Date().toISOString().slice(0, 10), hold: curMom._top3.slice(),
-    holdKeys: (function(){ var a = [], kbn = curMom._keyByName || {}; for (var i = 0; i < curMom._top3.length; i++) a.push(kbn[curMom._top3[i]] || curMom._top3[i]); return a; })(),
-    shorts: (curMom._shorts || []).slice(),
-    shortKeys: (function(){ var a = [], kbn = curMom._keyByName || {}, s = curMom._shorts || []; for (var i = 0; i < s.length; i++) a.push(kbn[s[i]] || s[i]); return a; })() };
+    holdKeys: newKeys, holdPx: newPx, holdAmt: newAmt,
+    shorts: sArr.slice(), shortKeys: sKeys, shortPx: sPx, shortAmt: sAmt };
   ST().hist.unshift({ date: ST().lastWeek.date, hold: (curMom._top3.join("+") || "现金多仓") + (curMom._shorts && curMom._shorts.length ? " | 空:" + curMom._shorts.join("+") : ""), snap: snap.join(", "), val: isNaN(val) ? "" : val });
   if (ST().hist.length > 200) ST().hist.pop();
   if (!isNaN(val) && val > 0) ST().sleeve = val;
