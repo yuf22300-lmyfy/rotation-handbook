@@ -91,7 +91,7 @@
 <div class="card" id="botCard" style="display:none; border-color:#26a69a;">
   <h2>🤖 自动机器人实况<span id="botSync" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
   <div id="botSummary" class="mut">等待机器人推送数据…</div>
-  <table class="hist" id="botPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓</th><th>方向</th><th>数量</th><th>开仓价</th><th>现价</th><th>浮盈浮亏</th></tr></thead><tbody></tbody></table>
+  <table class="hist" id="botPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓</th><th>方向</th><th>投入(U)</th><th>开仓价</th><th>现价</th><th>浮盈浮亏</th></tr></thead><tbody></tbody></table>
   <div class="botCharts" id="botCharts" style="display:none;">
     <div class="botChartBox"><div class="botChartTitle">每笔已实现盈亏 (USDT, 含手续费估算)</div><div id="botChartBars"></div></div>
     <div class="botChartBox"><div class="botChartTitle">累计已实现盈亏 (USDT)</div><div id="botChartLine"></div></div>
@@ -855,11 +855,11 @@ function botRender(){
   var rows = "";
   (d.longs || []).forEach(function(L){
     var p = botPx[L.c] || L.cost, u = (p - L.cost) * L.q, pc = L.cost > 0 ? 100 * (p / L.cost - 1) : 0;
-    rows += "<tr><td><b>" + L.c + "</b></td><td>多</td><td>" + fmt(L.q, 6) + "</td><td>" + fmt(L.cost, L.cost < 1 ? 4 : 2) + "</td><td>" + fmt(p, p < 1 ? 4 : 2) + "</td><td class='" + (u >= 0 ? 'up' : 'dn') + "'>" + (u >= 0 ? '+' : '') + fmt(u) + " (" + (pc >= 0 ? '+' : '') + pc.toFixed(1) + "%)</td></tr>";
+    rows += "<tr><td><b>" + L.c + "</b></td><td>多</td><td title='数量 " + L.q + "'>" + fmt(L.cost * L.q, 1) + " U</td><td>" + fmt(L.cost, L.cost < 1 ? 4 : 2) + "</td><td>" + fmt(p, p < 1 ? 4 : 2) + "</td><td class='" + (u >= 0 ? 'up' : 'dn') + "'>" + (u >= 0 ? '+' : '') + fmt(u) + " (" + (pc >= 0 ? '+' : '') + pc.toFixed(1) + "%)</td></tr>";
   });
   (d.shorts || []).forEach(function(S){
     var p = botPx[S.c] || S.entry, u = (S.entry - p) * S.q, pc = S.entry > 0 ? 100 * (S.entry / p - 1) : 0;
-    rows += "<tr><td><b>" + S.c + "</b></td><td>空</td><td>" + fmt(S.q, 4) + "</td><td>" + fmt(S.entry, S.entry < 1 ? 4 : 2) + "</td><td>" + fmt(p, p < 1 ? 4 : 2) + "</td><td class='" + (u >= 0 ? 'up' : 'dn') + "'>" + (u >= 0 ? '+' : '') + fmt(u) + " (" + (pc >= 0 ? '+' : '') + pc.toFixed(1) + "%)</td></tr>";
+    rows += "<tr><td><b>" + S.c + "</b></td><td>空</td><td title='数量 " + S.q + "'>" + fmt(S.entry * S.q, 1) + " U</td><td>" + fmt(S.entry, S.entry < 1 ? 4 : 2) + "</td><td>" + fmt(p, p < 1 ? 4 : 2) + "</td><td class='" + (u >= 0 ? 'up' : 'dn') + "'>" + (u >= 0 ? '+' : '') + fmt(u) + " (" + (pc >= 0 ? '+' : '') + pc.toFixed(1) + "%)</td></tr>";
   });
   var pt = document.getElementById("botPosT");
   pt.style.display = "table";
