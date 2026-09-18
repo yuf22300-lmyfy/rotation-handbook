@@ -118,6 +118,13 @@
   <h2 id="histTitle">本周记录 / 历史台账</h2>
   <table class="hist" id="histT"><thead><tr><th>日期</th><th>持有</th><th>动量快照</th><th>净值</th></tr></thead><tbody></tbody></table>
   <div style="margin-top:8px;"><button class="ghost" id="clearBtn" style="font-size:12px;">清空当前模式台账(慎)</button></div>
+  <div style="margin-top:10px; border-top:1px solid var(--border); padding-top:8px;">
+    <span class="note">数据迁移(持仓记录存在本设备浏览器里,换设备/换网址互不相通):</span><br>
+    <button class="ghost" id="exportBtn" style="font-size:12px;">📤 导出我的数据</button>
+    <button class="ghost" id="importBtn" style="font-size:12px;">📥 导入数据</button>
+    <textarea id="migBox" style="display:none; width:100%; height:70px; margin-top:6px; background:#131722; border:1px solid var(--border); color:var(--text); font-size:11px;" placeholder='点"导出"生成数据并全选复制;在另一台设备点"导入"粘贴到此处再点导入确认'></textarea>
+    <div id="migMsg" class="note" style="color:var(--amber);"></div>
+  </div>
 </div>
 
 <div class="card warn">
@@ -547,9 +554,36 @@ function renderHist(){
 }
 document.getElementById("clearBtn").onclick = function(){
   if (confirm("确定清空 [" + M().label + "] 的台账?")){
-    S[curMode] = { lastWeek: null, hist: [] };
-    if (!isNaN(val) && val > 0) ST().sleeve = val;
-  save(); renderHist();
+    var keepSleeve = ST().sleeve;
+    S[curMode] = { lastWeek: null, hist: [], sleeve: keepSleeve };
+    save(); renderHist();
+  }
+};
+
+document.getElementById("exportBtn").onclick = function(){
+  var box = document.getElementById("migBox");
+  box.style.display = "block";
+  box.value = JSON.stringify(S);
+  box.select();
+  var msg = document.getElementById("migMsg");
+  try { document.execCommand("copy"); msg.textContent = "已生成并复制到剪贴板 → 打开另一台设备的手册,点[导入数据]粘贴进去。"; }
+  catch (e) { msg.textContent = "已生成(全选文本框内容复制)→ 在另一台设备的手册里点[导入数据]粘贴。"; }
+};
+document.getElementById("importBtn").onclick = function(){
+  var box = document.getElementById("migBox");
+  box.style.display = "block";
+  var msg = document.getElementById("migMsg");
+  if (!box.value.trim()) { msg.textContent = "先把导出的数据粘贴到上面的文本框,再点导入。"; return; }
+  try {
+    var d = JSON.parse(box.value);
+    if (!d || !d.crypto || !d.cn) { msg.textContent = "数据格式不对:缺少币圈/A股字段。确认粘贴的是[导出我的数据]生成的完整内容。"; return; }
+    S = d;
+    save(); renderHist(); renderManualInputs();
+    document.getElementById("sleeveVal").value = (ST().sleeve || "");
+    msg.textContent = "导入成功:持仓记录和台账已恢复。点击[拉取行情]查看当前指令。";
+    doFetch();
+  } catch (e) {
+    msg.textContent = "解析失败:内容不是完整的 JSON(可能复制时截断了),重新导出一次再试。";
   }
 };
 
