@@ -353,7 +353,9 @@ function renderVerdict(top3, shorts){
   var last = lw ? lw.hold : [];
   var lwShorts = lw ? (lw.shorts || []) : [];
   document.getElementById("vTime").textContent = new Date().toLocaleString("zh-CN");
-  var cashSlots = M().topN - top3.length;
+    var svV = parseFloat(document.getElementById('sleeveVal').value); if (isNaN(svV) && ST().sleeve) svV = ST().sleeve;
+  var amtNote = (!isNaN(svV) && svV > 0) ? ('各 ' + Math.round(svV / M().topN) + ' U') : M().unitNote;
+var cashSlots = M().topN - top3.length;
   var shortOn = (curMode === "crypto" && ST().shortC);
   var h = "";
   h += '<div><span class="tag ' + (top3.length === M().topN ? "buy" : "cash") + '" style="font-size:13px;">当前状态[' + M().label + ']:' +
