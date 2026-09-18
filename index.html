@@ -97,7 +97,7 @@
     <div class="botChartBox"><div class="botChartTitle">累计已实现盈亏 (USDT)</div><div id="botChartLine"></div></div>
   </div>
   <div id="botHistHead" style="margin-top:12px; display:none;" class="note"><b>交易流水</b></div>
-  <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(本地)</th><th>操作</th><th>币</th><th>数量</th><th>价格</th><th>动作后现金</th><th>本笔盈亏</th></tr></thead><tbody></tbody></table>
+  <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(本地)</th><th>操作</th><th>币</th><th>数量</th><th>买入价</th><th>卖出价</th><th>动作后现金</th><th>本笔盈亏</th></tr></thead><tbody></tbody></table>
 </div>
 
 <div class="card">
@@ -767,23 +767,27 @@ function botReplay(){
     if (f.length < 7) continue;
     var a = f[3], c = f[2], q = parseFloat(f[4]), p = parseFloat(f[5]);
     if (isNaN(q) || isNaN(p)) continue;
-    var pnl = null;
-    if (a.indexOf("BUY") === 0){ qty[c] = (qty[c] || 0) + q; cost[c] = (cost[c] || 0) + q * p / 0.999; }
+    var pnl = null, buyPx = null, sellPx = null;
+    if (a.indexOf("BUY") === 0){ qty[c] = (qty[c] || 0) + q; cost[c] = (cost[c] || 0) + q * p / 0.999; buyPx = p; }
     else if (a.indexOf("SELL") === 0){
       var have = qty[c] || 0;
       if (have > 0){
         var avg = cost[c] / have;
         pnl = q * p * 0.999 - q * avg;
+        buyPx = Math.round(avg * 10000) / 10000;
         var sold = Math.min(q, have);
         qty[c] = have - sold; cost[c] = cost[c] - avg * sold;
       }
+      sellPx = p;
     }
+    else if (a.indexOf("SHORT") === 0){ buyPx = p; }
     else if (a.indexOf("COVER") === 0){
       var e = parseFloat(f[7]);
       if (!isNaN(e)) pnl = (e - p) * q - 0.001 * q * p;
+      buyPx = isNaN(e) ? null : e; sellPx = p;
     }
     if (pnl !== null){ out.realized += pnl; out.cum.push(Math.round(out.realized * 100) / 100); }
-    out.rows.push({ raw: f, pnl: pnl });
+    out.rows.push({ raw: f, pnl: pnl, buyPx: buyPx, sellPx: sellPx });
   }
   return out;
 }
@@ -845,12 +849,13 @@ function botRender(){
   var sgn = function(v){ return (v >= 0 ? '+' : '') + fmt(v); };
   var h = '<div class="botChips">';
   h += '<div class="chip">总盈亏<b class="' + cls(total) + '">' + sgn(total) + '</b>USDT</div>';
+  h += '<div class="chip">运行以来总收益<b class="' + cls(total) + '">' + (total >= 0 ? '+' : '') + (inv > 0 ? (100 * total / inv).toFixed(2) : "0.00") + '%</b></div>';
   h += '<div class="chip">已实现<b class="' + cls(rep.realized) + '">' + sgn(rep.realized) + '</b></div>';
   h += '<div class="chip">浮动(未实现)<b class="' + cls(upl) + '">' + sgn(upl) + '</b></div>';
   h += '<div class="chip">已投入<b style="color:#d1d4dc">' + fmt(inv) + '</b>USDT</div>';
   h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + (d.acctAvail != null ? fmt(d.acctAvail) : "—") + '</b>USDT</div>';
   h += '</div>';
-  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已投入=现货成本+空单保证金(1x); 可用现金=OKX账户实际可用USDT(全账户口径)。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。</div>';
+  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已投入=现货成本+空单保证金(1x); 可用现金=OKX账户实际可用USDT(全账户口径); 运行以来总收益=总盈亏÷当前投入本金。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。</div>';
   document.getElementById("botSummary").innerHTML = h;
   var rows = "";
   (d.longs || []).forEach(function(L){
@@ -870,7 +875,7 @@ function botRender(){
   var tr = "";
   rep.rows.forEach(function(r){
     var f = r.raw;
-    tr += "<tr><td>" + botLocalTime(f[0]) + "</td><td>" + botAct(f[3]) + "</td><td><b>" + f[2] + "</b></td><td>" + f[4] + "</td><td>" + f[5] + "</td><td class='mut'>" + f[6] + "</td>";
+    tr += "<tr><td>" + botLocalTime(f[0]) + "</td><td>" + botAct(f[3]) + "</td><td><b>" + f[2] + "</b></td><td>" + f[4] + "</td><td>" + (r.buyPx != null ? fmt(r.buyPx, r.buyPx < 1 ? 4 : 2) : "—") + "</td><td>" + (r.sellPx != null ? fmt(r.sellPx, r.sellPx < 1 ? 4 : 2) : "—") + "</td><td class='mut'>" + f[6] + "</td>";
     if (r.pnl !== null && r.pnl !== undefined){
       tr += "<td class='" + (r.pnl >= 0 ? 'up' : 'dn') + "'><b>" + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + "</b></td>";
       trades.push({ label: f[2] + " " + botLocalTime(f[0]).slice(0, 5), pnl: r.pnl });
