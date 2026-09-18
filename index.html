@@ -834,9 +834,9 @@ function botRender(){
   document.getElementById("botCard").style.display = "block";
   var d = botData;
   document.getElementById("botSync").textContent = "数据 " + (d.ts || "?") + " UTC · 行情 60 秒 / 机器人数据 3 分钟自动刷新";
-  var lv = 0, sv = 0, supl = 0, lupl = 0;
-  (d.longs || []).forEach(function(L){ var p = botPx[L.c] || L.cost; lv += p * L.q; lupl += (p - L.cost) * L.q; });
-  (d.shorts || []).forEach(function(S){ var p2 = botPx[S.c] || S.entry; sv += S.entry * S.q; supl += (S.entry - p2) * S.q; });
+  var lv = 0, sv = 0, supl = 0, lupl = 0, inv = 0;
+  (d.longs || []).forEach(function(L){ var p = botPx[L.c] || L.cost; lv += p * L.q; lupl += (p - L.cost) * L.q; inv += L.cost * L.q; });
+  (d.shorts || []).forEach(function(S){ var p2 = botPx[S.c] || S.entry; sv += S.entry * S.q; supl += (S.entry - p2) * S.q; inv += S.entry * S.q; });
   var upl = lupl + supl;
   var eq = (d.cash || 0) + lv + sv + supl;
   var rep = botReplay();
@@ -847,10 +847,10 @@ function botRender(){
   h += '<div class="chip">总盈亏<b class="' + cls(total) + '">' + sgn(total) + '</b>USDT</div>';
   h += '<div class="chip">已实现<b class="' + cls(rep.realized) + '">' + sgn(rep.realized) + '</b></div>';
   h += '<div class="chip">浮动(未实现)<b class="' + cls(upl) + '">' + sgn(upl) + '</b></div>';
-  h += '<div class="chip">总权益约<b style="color:#d1d4dc">' + fmt(eq) + '</b></div>';
-  h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + fmt(d.cash || 0) + '</b></div>';
+  h += '<div class="chip">已投入<b style="color:#d1d4dc">' + fmt(inv) + '</b>USDT</div>';
+  h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + (d.acctAvail != null ? fmt(d.acctAvail) : "—") + '</b>USDT</div>';
   h += '</div>';
-  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。买回同币按买入均价算成本。</div>';
+  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已投入=现货成本+空单保证金(1x); 可用现金=OKX账户实际可用USDT(全账户口径)。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。</div>';
   document.getElementById("botSummary").innerHTML = h;
   var rows = "";
   (d.longs || []).forEach(function(L){
