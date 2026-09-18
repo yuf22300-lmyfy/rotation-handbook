@@ -296,7 +296,9 @@ function compute(moms, prices, pasts){
 }
 
 function renderOrder(top3, shorts){
-  var box = document.getElementById("orderBox");
+  var box = document.getElementById('orderBox');
+  var sv0 = parseFloat(document.getElementById('sleeveVal').value);
+  var amtNote = (!isNaN(sv0) && sv0 > 0) ? ('各 ' + Math.round(sv0 / M().topN) + ' U') : M().unitNote;
   var daily = "";
   var lw = ST().lastWeek;
   var shortOn = (curMode === "crypto" && ST().shortC);
@@ -339,9 +341,9 @@ function renderOrder(top3, shorts){
   for (var i = 0; i < top3.length; i++) (last.indexOf(top3[i]) >= 0 ? keeps : buys).push(top3[i]);
   for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) sells.push(last[i]);
   var h = "";
-  if (last.length === 0) h += '<div>尚无上周记录 → 首周建仓(' + M().unitNote + '):</div>';
+  if (last.length === 0) h += '<div>尚无上周记录 → 首周建仓(' + amtNote + '):</div>';
   if (sells.length) h += '<div class="dn">卖出:' + sells.join("、") + '</div>';
-  if (buys.length) h += '<div class="up">买入:' + buys.join("、") + '(' + M().unitNote + ')</div>';
+  if (buys.length) h += '<div class="up">买入:' + buys.join("、") + '(' + amtNote + ')</div>';
   if (keeps.length) h += '<div style="color:#7f9bff">继续持有:' + keeps.join("、") + '(不动)</div>';
   if (top3.length < M().topN) h += '<div class="am">只有 ' + top3.length + ' 个正动量标的 → 其余 ' + (M().topN - top3.length) + '/' + M().topN + ' 持现金。</div>';
   h += '<div class="mut" style="font-size:12px;margin-top:4px;">本周多头:' + (top3.join(" / ") || "全现金") + '</div>';
@@ -383,7 +385,7 @@ function renderVerdict(top3, shorts){
     for (var i = 0; i < shorts.length; i++) if (lwShorts.indexOf(shorts[i]) < 0) openS.push(shorts[i]);
     for (var i = 0; i < lwShorts.length; i++) if (shorts.indexOf(lwShorts[i]) < 0) closeS.push(lwShorts[i]);
   }
-  h += enters.length ? '<div class="up" style="font-size:17px;">【入场】买 ' + enters.join("、") + '(' + M().unitNote + ')</div>'
+  h += enters.length ? '<div class="up" style="font-size:17px;">【入场】买 ' + enters.join("、") + '(' + amtNote + ')</div>'
                      : '<div class="mut">【入场】无新买入' + (top3.length ? "(持仓已在榜)" : "(无正动量,不上场)") + "</div>";
   if (shortOn) h += openS.length ? '<div class="dn" style="font-size:17px;">【做空】空 ' + openS.join("、") + '(各 1/4 袖仓,永续合约)</div>'
                      : '<div class="mut">【做空】无新空单' + (shorts.length ? "(空单已在榜)" : "") + "</div>";
