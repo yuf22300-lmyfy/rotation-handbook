@@ -81,6 +81,19 @@
   <div id="verdictBox" class="mut" style="font-size:16px; line-height:2.1;">正在拉取行情…</div>
 </div>
 
+<div class="card" id="okxCard" style="display:none;">
+  <h2>OKX 实盘账户连接(只读)</h2>
+  <div class="note" style="margin-bottom:6px;">连接后,上方"当前指令"的持仓明细表显示<b>账户真实持仓与实时盈亏</b>(买入价=真实成交加权,含手续费;显示 8 个轮动币的现货 + 合约仓)。建议新建<b>只读权限</b>API 密钥;密钥只存在本设备浏览器里,每台设备(含手机)要各填一次。USDT 现金为全账户口径(含其他策略资金)。成本价按近 100 笔成交计算。</div>
+  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    <input type="password" id="okxKey" placeholder="API Key" style="flex:1; min-width:130px;">
+    <input type="password" id="okxSec" placeholder="Secret" style="flex:1; min-width:130px;">
+    <input type="password" id="okxPass" placeholder="Passphrase" style="flex:1; min-width:110px;">
+    <button class="ghost" id="okxSave">连接</button>
+    <button class="ghost" id="okxClear" style="display:none;">断开</button>
+  </div>
+  <div class="note" id="okxStatus" style="margin-top:6px;"></div>
+</div>
+
 <div class="card">
   <h2>入场/离场时间表(固定节奏,不许漂移)</h2>
   <div class="note">
@@ -368,6 +381,19 @@ function renderOrder(top3, shorts){
   box.innerHTML = h + daily;
 }
 
+function posRowHtml(pr, u){
+  var pnl = (pr.pnl != null && isFinite(pr.pnl)) ? pr.pnl : null;
+  var pct = (pr.pct != null && isFinite(pr.pct)) ? pr.pct : null;
+  if (pnl == null && pr.ent && pr.cur && pr.amt){ pct = (pr.cur / pr.ent - 1) * 100 * pr.d; pnl = (pr.cur - pr.ent) / pr.ent * pr.amt * pr.d; }
+  return "<tr><td><b>" + (pr.d < 0 ? "[空] " : "") + pr.c + "</b></td>" +
+    "<td>" + (pr.qty != null ? pr.qty : "—") + "</td>" +
+    "<td>" + (pr.amt != null ? pr.amt + " " + u : "—") + "</td>" +
+    "<td>" + (pr.ent != null ? fmt(pr.ent, pr.ent < 1 ? 4 : 2) : "—") + "</td>" +
+    "<td>" + (pr.cur != null ? fmt(pr.cur, pr.cur < 1 ? 4 : 2) : "—") + "</td>" +
+    "<td class='" + (pnl == null ? "mut" : pnl >= 0 ? "up" : "dn") + "'>" + (pnl == null ? "—" : (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " " + u) + "</td>" +
+    "<td class='" + (pct == null ? "mut" : pct >= 0 ? "up" : "dn") + "'>" + (pct == null ? "—" : (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") + "</td></tr>";
+}
+
 function renderVerdict(top3, shorts){
   var box = document.getElementById("verdictBox");
   var lw = ST().lastWeek;
@@ -384,25 +410,27 @@ var cashSlots = M().topN - top3.length;
     (shortOn && shorts.length ? ' <span class="tag dn" style="font-size:13px;">空 ' + shorts.length + '/2 仓</span>' : "") +
     (top3.length || shorts.length ? ' <b style="font-size:15px;">' + (top3.concat(shorts).join(" · ")) + '</b>' : "") + "</div>";
   var u = (curMode === "crypto" ? "U" : "元");
+  if (curMode === "crypto" && okxLive && okxLive.rows){
+    h += '<div style="margin-top:8px;border-top:1px dashed #3a3f4d;padding-top:6px;">' +
+      '<div style="font-size:11px;color:#8f94a3;margin-bottom:3px;">当前持仓明细 · <b style="color:#26a69a;">OKX 账户实时</b>(' + okxLive.time + (okxLive.err ? ' · 本次刷新失败,显示上次数据(' + okxLive.err + ')' : '') + ')· 买入价=真实成交加权</div>' +
+      '<table class="hist" style="font-size:12px;"><thead><tr><th>持仓</th><th>数量</th><th>投入</th><th>买入价</th><th>现价</th><th>利润</th><th>利润%</th></tr></thead><tbody>';
+    for (var i = 0; i < okxLive.rows.length; i++) h += posRowHtml(okxLive.rows[i], u);
+    h += '</tbody></table>';
+    if (!okxLive.rows.length) h += '<div class="mut" style="font-size:12px;">账户当前无轮动币持仓(全现金)</div>';
+    if (okxLive.cash != null) h += '<div style="font-size:11px;color:#8f94a3;margin-top:3px;">账户可用 USDT:' + okxLive.cash + ' · 账户总权益:' + okxLive.totalEq + '(全账户口径,含其他策略资金)</div>';
+    h += '</div>';
+  } else {
   var pxMap = curMom._pxByName || {};
   var posRows = [];
   for (var i = 0; i < last.length; i++) posRows.push({ c: last[i], d: 1, cur: pxMap[last[i]] != null ? pxMap[last[i]] : null, ent: lw && lw.holdPx ? lw.holdPx[i] : null, amt: lw && lw.holdAmt ? lw.holdAmt[i] : null });
   for (var i = 0; i < lwShorts.length; i++) posRows.push({ c: lwShorts[i], d: -1, cur: pxMap[lwShorts[i]] != null ? pxMap[lwShorts[i]] : null, ent: lw && lw.shortPx ? lw.shortPx[i] : null, amt: lw && lw.shortAmt ? lw.shortAmt[i] : null });
   if (posRows.length){
     h += '<div style="margin-top:8px;border-top:1px dashed #3a3f4d;padding-top:6px;">' +
-      '<div style="font-size:11px;color:#8f94a3;margin-bottom:3px;">当前持仓明细(买价=记录换仓时的价格;"—"=旧记录未存买价,下次换仓起自动记录)</div>' +
-      '<table class="hist" style="font-size:12px;"><thead><tr><th>持仓</th><th>投入</th><th>买入价</th><th>现价</th><th>利润</th><th>利润%</th></tr></thead><tbody>';
-    for (var i = 0; i < posRows.length; i++){
-      var pr = posRows[i], pnl = null, pct = null;
-      if (pr.ent && pr.cur && pr.amt){ pct = (pr.cur / pr.ent - 1) * 100 * pr.d; pnl = (pr.cur - pr.ent) / pr.ent * pr.amt * pr.d; }
-      h += "<tr><td><b>" + (pr.d < 0 ? "[空] " : "") + pr.c + "</b></td>" +
-        "<td>" + (pr.amt != null ? pr.amt + " " + u : "—") + "</td>" +
-        "<td>" + (pr.ent != null ? fmt(pr.ent, pr.ent < 1 ? 4 : 2) : "—") + "</td>" +
-        "<td>" + (pr.cur != null ? fmt(pr.cur, pr.cur < 1 ? 4 : 2) : "—") + "</td>" +
-        "<td class='" + (pnl == null ? "mut" : pnl >= 0 ? "up" : "dn") + "'>" + (pnl == null ? "—" : (pnl >= 0 ? "+" : "") + pnl.toFixed(1) + " " + u) + "</td>" +
-        "<td class='" + (pct == null ? "mut" : pct >= 0 ? "up" : "dn") + "'>" + (pct == null ? "—" : (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") + "</td></tr>";
-    }
+      '<div style="font-size:11px;color:#8f94a3;margin-bottom:3px;">当前持仓明细 · 本地记录' + (S.crypto && S.crypto.okx ? '(OKX拉取中或失败)' : '(未连接OKX,下方卡片可连实时账户)') + '</div>' +
+      '<table class="hist" style="font-size:12px;"><thead><tr><th>持仓</th><th>数量</th><th>投入</th><th>买入价</th><th>现价</th><th>利润</th><th>利润%</th></tr></thead><tbody>';
+    for (var i = 0; i < posRows.length; i++) h += posRowHtml(posRows[i], u);
     h += "</tbody></table></div>";
+  }
   }
   var enters = [], exits = [];
   for (var i = 0; i < top3.length; i++) if (last.indexOf(top3[i]) < 0) enters.push(top3[i]);
@@ -511,6 +539,7 @@ function doFetch(){
   function finish(){
     st.textContent = "更新于 " + new Date().toLocaleString("zh-CN");
     compute(moms, prices, pasts);
+    if (curMode === "crypto") fetchOkxLive();
   }
   if (curMode === "crypto"){
     tryOKX(moms, prices, pasts).then(function(ok){
@@ -548,6 +577,119 @@ function doFetch(){
   }
 }
 document.getElementById("fetchBtn").onclick = doFetch;
+
+// ===== OKX 实盘持仓(只读直连)=====
+var okxLive = null, okxTimer = null;
+async function okxSign(ts, method, path, secret){
+  var enc = new TextEncoder();
+  var key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  var buf = await crypto.subtle.sign("HMAC", key, enc.encode(ts + method + path));
+  var arr = new Uint8Array(buf), s = "";
+  for (var i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
+  return btoa(s);
+}
+async function okxGet(path){
+  var o = S.crypto.okx;
+  var ts = new Date().toISOString();
+  var sig = await okxSign(ts, "GET", path, o.s);
+  var r = await fetch("https://www.okx.com" + path, { headers: {
+    "OK-ACCESS-KEY": o.k, "OK-ACCESS-SIGN": sig, "OK-ACCESS-TIMESTAMP": ts,
+    "OK-ACCESS-PASSPHRASE": o.p, "Content-Type": "application/json" } });
+  var j = await r.json();
+  if (j.code !== "0") throw new Error("OKX " + j.code + " " + (j.msg || ""));
+  return j;
+}
+function okxCostFromFills(fills){
+  var st = {};
+  var arr = fills.slice().sort(function(a, b){ return (+a.ts) - (+b.ts); });
+  for (var i = 0; i < arr.length; i++){
+    var f = arr[i], p = (f.instId || "").split("-");
+    if (p.length < 2 || p[1] !== "USDT") continue;
+    var base = p[0], sz = parseFloat(f.fillSz), px = parseFloat(f.fillPx), fee = parseFloat(f.fee || 0);
+    if (!isFinite(sz) || !isFinite(px) || sz <= 0) continue;
+    if (!st[base]) st[base] = { q: 0, cost: 0 };
+    if (f.side === "buy"){
+      st[base].q += sz + (f.feeCcy === base ? fee : 0);
+      st[base].cost += sz * px + (f.feeCcy === "USDT" ? -fee : 0);
+    } else {
+      var q0 = st[base].q;
+      if (q0 > 0){
+        var avg = st[base].cost / q0, out = Math.min(sz, q0);
+        st[base].q -= out; st[base].cost -= avg * out;
+      }
+    }
+  }
+  return st;
+}
+async function fetchOkxLive(){
+  if (curMode !== "crypto" || !S.crypto || !S.crypto.okx) return;
+  try {
+    var bal = await okxGet("/api/v5/account/balance");
+    var fil = await okxGet("/api/v5/trade/fills-history?instType=SPOT&limit=100");
+    var swp = null;
+    try { swp = await okxGet("/api/v5/account/positions?instType=SWAP"); } catch (e2) {}
+    var uni = {}, items = MODES.crypto.items;
+    for (var i = 0; i < items.length; i++) uni[itemName(items[i])] = true;
+    var pxMap = (curMom && curMom._pxByName) || {};
+    var cost = okxCostFromFills(fil.data || []);
+    var rows = [], usdt = 0, teq = "";
+    var dets = (bal.data && bal.data[0] && bal.data[0].details) || [];
+    for (var i = 0; i < dets.length; i++){
+      var d = dets[i], c = d.ccy;
+      if (c === "USDT"){ usdt = parseFloat(d.availBal || d.cashBal || 0); continue; }
+      if (!uni[c]) continue;
+      var qty = parseFloat(d.cashBal || 0) + parseFloat(d.frozenBal || 0);
+      var cur = pxMap[c] != null ? pxMap[c] : (qty > 0 ? parseFloat(d.eqUsd) / qty : null);
+      if (!(qty * (cur || 0) > 0.5)) continue;
+      var cst = cost[c];
+      var ent = (cst && cst.q > qty * 0.5 && cst.q > 0) ? cst.cost / cst.q : null;
+      rows.push({ c: c, d: 1, qty: (Math.round(qty * 1000000) / 1000000).toString(), ent: ent, cur: cur, amt: ent != null ? Math.round(ent * qty * 100) / 100 : null });
+    }
+    if (swp && swp.data) for (var i = 0; i < swp.data.length; i++){
+      var sp = swp.data[i], parts = (sp.instId || "").split("-");
+      var c2 = parts[0], sz2 = Math.abs(parseFloat(sp.pos || 0));
+      if (!sz2 || !uni[c2]) continue;
+      var sh = (sp.posSide === "short") || parseFloat(sp.pos || 0) < 0;
+      var ap = parseFloat(sp.avgPx), mp = parseFloat(sp.markPx);
+      var upl = parseFloat(sp.upl || 0);
+      var pct = (sp.uplRatio && parseFloat(sp.uplRatio) !== 0) ? parseFloat(sp.uplRatio) * 100
+        : (ap && mp ? (mp / ap - 1) * 100 * (sh ? -1 : 1) : null);
+      rows.push({ c: c2 + "(永续)", d: sh ? -1 : 1, qty: sz2.toString(), ent: ap || null, cur: mp || null, amt: null, pnl: upl, pct: pct });
+    }
+    if (bal.data && bal.data[0]) teq = (Math.round(parseFloat(bal.data[0].totalEq || 0) * 100) / 100).toString();
+    okxLive = { rows: rows, cash: Math.round(usdt * 100) / 100, totalEq: teq, time: new Date().toLocaleTimeString("zh-CN"), err: null };
+    document.getElementById("okxStatus").innerHTML = '<span class="up">已连接 · ' + okxLive.rows.length + ' 个持仓 · 更新 ' + okxLive.time + '(每 60 秒自动刷新)</span>';
+  } catch (e) {
+    if (okxLive) okxLive.err = "" + (e.message || e);
+    var es = document.getElementById("okxStatus");
+    if (es) es.innerHTML = '<span class="dn">拉取失败:' + (e.message || e) + '(密钥错误或网络不通,检查 VPN)</span>';
+  }
+  if (curMom && curMom._top3) renderVerdict(curMom._top3, curMom._shorts || []);
+}
+document.getElementById("okxSave").onclick = function(){
+  var k = document.getElementById("okxKey").value.trim();
+  var s = document.getElementById("okxSec").value.trim();
+  var p = document.getElementById("okxPass").value.trim();
+  if (k && s && p){
+    S.crypto.okx = { k: k, s: s, p: p };
+    save();
+    document.getElementById("okxClear").style.display = "";
+    document.getElementById("okxStatus").textContent = "密钥已保存,正在拉取…";
+  } else if (!S.crypto.okx){
+    document.getElementById("okxStatus").innerHTML = '<span class="dn">三个框都要填(API Key / Secret / Passphrase)</span>';
+    return;
+  } else {
+    document.getElementById("okxStatus").textContent = "沿用已保存的密钥,正在拉取…";
+  }
+  fetchOkxLive();
+};
+document.getElementById("okxClear").onclick = function(){
+  delete S.crypto.okx; save(); okxLive = null;
+  document.getElementById("okxKey").value = ""; document.getElementById("okxSec").value = ""; document.getElementById("okxPass").value = "";
+  document.getElementById("okxClear").style.display = "none";
+  document.getElementById("okxStatus").textContent = "已断开,持仓明细表回到本地记录模式。";
+  if (curMom && curMom._top3) renderVerdict(curMom._top3, curMom._shorts || []);
+};
 
 document.getElementById("manualBtn").onclick = function(){
   var items = M().items, moms = {}, ok = true;
@@ -655,6 +797,7 @@ document.getElementById("modeBar").addEventListener("click", function(e){
   curMode = b.dataset.m;
   document.querySelectorAll("#modeBar button").forEach(function(x){ x.classList.toggle("on", x === b); });
   document.getElementById("shortRow").style.display = (curMode === "crypto") ? "block" : "none";
+  document.getElementById("okxCard").style.display = (curMode === "crypto") ? "block" : "none";
   document.getElementById("rankWrap").style.display = "none";
   document.getElementById("doneBtn").disabled = true;
   document.getElementById("orderBox").innerHTML = '<span class="mut">切换到 [' + M().label + '] 模式,正在拉取…</span>';
@@ -664,6 +807,16 @@ document.getElementById("modeBar").addEventListener("click", function(e){
 
 renderManualInputs(); renderHist();
 document.getElementById("shortRow").style.display = (curMode === "crypto") ? "block" : "none";
+document.getElementById("okxCard").style.display = (curMode === "crypto") ? "block" : "none";
+if (S.crypto.okx){
+  document.getElementById("okxClear").style.display = "";
+  document.getElementById("okxSave").textContent = "连接/刷新";
+  document.getElementById("okxStatus").textContent = "已保存密钥,正在拉取…";
+  fetchOkxLive();
+}
+if (S.crypto.okx && !okxTimer){
+  okxTimer = setInterval(function(){ if (!document.hidden) fetchOkxLive(); }, 60000);
+}
 if (S.crypto.shortC){
   document.getElementById("shortToggle").textContent = "空头实验(C):开启 ← 点击关闭";
   document.getElementById("shortNote").style.display = "block";
