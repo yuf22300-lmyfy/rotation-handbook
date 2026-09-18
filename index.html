@@ -322,6 +322,8 @@ function renderOrder(top3, shorts){
   for (var i = 0; i < top3.length; i++) (last.indexOf(top3[i]) >= 0 ? keeps : buys).push(top3[i]);
   for (var i = 0; i < last.length; i++) if (top3.indexOf(last[i]) < 0) sells.push(last[i]);
   var h = "";
+  var svV = parseFloat(document.getElementById('sleeveVal').value); if (isNaN(svV) && ST().sleeve) svV = ST().sleeve;
+  var amtNote = (!isNaN(svV) && svV > 0) ? ('各 ' + Math.round(svV / M().topN) + ' U') : M().unitNote;
   if (last.length === 0) h += '<div>尚无上周记录 → 首周建仓(' + amtNote + '):</div>';
   if (sells.length) h += '<div class="dn">卖出:' + sells.join("、") + '</div>';
   if (buys.length) h += '<div class="up">买入:' + buys.join("、") + '(' + amtNote + ')</div>';
