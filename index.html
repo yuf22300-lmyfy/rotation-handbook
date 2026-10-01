@@ -517,6 +517,48 @@ function tryOKX(moms, prices, pasts){
     }
   });
 }
+function gtimgLoad(sym, vn, ms){
+  return new Promise(function(resolve){
+    var s = document.createElement("script");
+    var settled = false;
+    var timer = setTimeout(function(){ if (settled) return; settled = true; try { s.remove(); } catch(e2){} resolve(null); }, ms);
+    window[vn] = undefined;
+    s.onload = function(){
+      if (settled) return; settled = true; clearTimeout(timer);
+      var d = window[vn];
+      try { delete window[vn]; s.remove(); } catch(e2){} resolve(d);
+    };
+    s.onerror = function(){ if (settled) return; settled = true; clearTimeout(timer); try { s.remove(); } catch(e2){} resolve(null); };
+    s.src = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=" + vn + "&param=" + sym + ",day,,,30,qfq";
+    document.head.appendChild(s);
+  });
+}
+function tryGtimg(moms, prices, pasts){
+  document.getElementById("status").textContent = "东方财富不通,自动换备用数据源(腾讯行情)…";
+  var items = M().items;
+  return new Promise(function(resolve){
+    var done = 0, ok = 0;
+    for (var i = 0; i < items.length; i++){
+      (function(it){
+        var p2 = it.id.split(".");
+        var sym = (p2[0] === "0" ? "sz" : "sh") + p2[1];
+        gtimgLoad(sym, "fqk_" + sym + "_" + Date.now(), 9000).then(function(d){
+          var arr = d && d.data && d.data[sym] && (d.data[sym].qfqday || d.data[sym].day);
+          if (arr && arr.length >= M().L + 2){
+            var now = parseFloat(arr[arr.length - 1][2]), past = parseFloat(arr[arr.length - 1 - M().L][2]);
+            if (now > 0 && past > 0){
+              prices[it.code] = now; pasts[it.code] = past;
+              moms[it.code] = 100 * (now / past - 1);
+              ok++;
+            }
+          }
+          done++;
+          if (done === items.length) resolve(ok === items.length);
+        });
+      })(items[i]);
+    }
+  });
+}
 function tryGecko(moms, prices, pasts){
   document.getElementById("status").textContent = "OKX 不通,自动换备用数据源(CoinGecko)…";
   var ids = { ETH:"ethereum", BTC:"bitcoin", SOL:"solana", BNB:"binancecoin", XRP:"ripple", DOGE:"dogecoin", AVAX:"avalanche-2", LINK:"chainlink" };
@@ -578,7 +620,12 @@ function doFetch(){
           }
         }).catch(function(){ fail++; })
           .then(function(){ done++; if (done === items.length){
-            if (fail > 0) manualMode("东方财富接口不通");
+            if (fail > 0){
+              tryGtimg(moms, prices, pasts).then(function(ok3){
+                if (ok3) finish();
+                else manualMode("东方财富和腾讯备用源都不通");
+              });
+            }
             else finish();
           } });
       })(items[i]);
