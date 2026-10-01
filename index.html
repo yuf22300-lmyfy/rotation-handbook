@@ -90,24 +90,25 @@
 
 <div class="card" id="botCard" style="display:none; border-color:#26a69a;">
   <h2>🤖 自动机器人实况<span id="botSync" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
-  <div id="botSummary" class="mut">等待机器人推送数据…</div>
-  <table class="hist" id="botPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓</th><th>方向</th><th>投入(U)</th><th>开仓价</th><th>现价</th><th>浮盈浮亏</th></tr></thead><tbody></tbody></table>
-  <div class="botCharts" id="botCharts" style="display:none;">
-    <div class="botChartBox"><div class="botChartTitle">每笔已实现盈亏 (USDT, 含手续费估算)</div><div id="botChartBars"></div></div>
-    <div class="botChartBox"><div class="botChartTitle">累计已实现盈亏 (USDT)</div><div id="botChartLine"></div></div>
+  <div id="botCryptoBody">
+    <div id="botSummary" class="mut">等待机器人推送数据…</div>
+    <table class="hist" id="botPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓</th><th>方向</th><th>投入(U)</th><th>开仓价</th><th>现价</th><th>浮盈浮亏</th></tr></thead><tbody></tbody></table>
+    <div class="botCharts" id="botCharts" style="display:none;">
+      <div class="botChartBox"><div class="botChartTitle">每笔已实现盈亏 (USDT, 含手续费估算)</div><div id="botChartBars"></div></div>
+      <div class="botChartBox"><div class="botChartTitle">累计已实现盈亏 (USDT)</div><div id="botChartLine"></div></div>
+    </div>
+    <div id="botHistHead" style="margin-top:12px; display:none;" class="note"><b>交易流水</b></div>
+    <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(本地)</th><th>操作</th><th>币</th><th>数量</th><th>买入价</th><th>卖出价</th><th>动作后现金</th><th>本笔盈亏</th></tr></thead><tbody></tbody></table>
   </div>
-  <div id="botHistHead" style="margin-top:12px; display:none;" class="note"><b>交易流水</b></div>
-  <table class="hist" id="botHistT" style="display:none;"><thead><tr><th>时间(本地)</th><th>操作</th><th>币</th><th>数量</th><th>买入价</th><th>卖出价</th><th>动作后现金</th><th>本笔盈亏</th></tr></thead><tbody></tbody></table>
-</div>
-
-<div class="card" id="astkCard" style="display:none; border-color:#e04050;">
-  <h2>🇨🇳 A股ETF虚拟盘<span id="astkSync" class="mut" style="font-size:11px; font-weight:400; margin-left:8px;"></span></h2>
-  <div id="astkSummary" class="mut">等待A股虚拟盘数据…</div>
-  <div id="astkCurve" style="margin-top:10px;"></div>
-  <div class="note" style="margin-top:6px; font-size:11px;" id="astkBack"></div>
-  <table class="hist" id="astkPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓ETF</th><th>股数</th><th>成本(¥)</th><th>现价</th><th>浮盈浮亏(¥)</th></tr></thead><tbody></tbody></table>
-  <div id="astkMom" class="note" style="margin-top:10px; font-size:12px;"></div>
-  <table class="hist" id="astkHistT" style="margin-top:6px; display:none;"><thead><tr><th>日期</th><th>操作</th><th>ETF</th><th>股数</th><th>价格</th><th>本笔盈亏(¥)</th></tr></thead><tbody></tbody></table>
+  <div id="botAstkBody" style="display:none;">
+    <div id="astkSummary" class="mut">等待A股虚拟盘数据…</div>
+    <div class="note" style="font-size:11px; margin-top:4px;">规则:10 只 ETF · 14 个交易日动量 · 每周五收盘出信号 → 下一交易日开盘价成交 · 前 2 名各 1/2,动量 ≤ 0 的名额持币</div>
+    <div id="astkCurve" style="margin-top:10px;"></div>
+    <div class="note" style="margin-top:6px; font-size:11px;" id="astkBack"></div>
+    <table class="hist" id="astkPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓ETF</th><th>股数</th><th>成本(¥)</th><th>现价</th><th>浮盈浮亏(¥)</th></tr></thead><tbody></tbody></table>
+    <div id="astkMom" class="note" style="margin-top:10px; font-size:12px;"></div>
+    <table class="hist" id="astkHistT" style="margin-top:6px; display:none;"><thead><tr><th>日期</th><th>操作</th><th>ETF</th><th>股数</th><th>价格</th><th>本笔盈亏(¥)</th></tr></thead><tbody></tbody></table>
+  </div>
 </div>
 
 <div class="card">
@@ -696,6 +697,7 @@ document.getElementById("modeBar").addEventListener("click", function(e){
   document.getElementById("doneBtn").disabled = true;
   document.getElementById("orderBox").innerHTML = '<span class="mut">切换到 [' + M().label + '] 模式,正在拉取…</span>';
   renderManualInputs(); renderHist();
+  botApplyMode();
   doFetch();
 });
 
@@ -900,6 +902,7 @@ function botRender(){
     document.getElementById("botChartBars").innerHTML = botSvgBars(trades);
     document.getElementById("botChartLine").innerHTML = botSvgLine(rep.cum);
   }
+  botApplyMode();
 }
 function botGetData(){
   return botFetch(BOT_API, 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
@@ -954,8 +957,7 @@ function astkCurveSvg(cv){
 }
 function astkRender(){
   if (!astkData) return;
-  document.getElementById("astkCard").style.display = "block";
-  document.getElementById("astkSync").textContent = " 数据截至 " + astkData.updated;
+  document.getElementById("botCard").style.display = "block";
   var eq = astkData.equity, up = eq - astkData.start;
   var upPct = (up / astkData.start * 100).toFixed(2);
   var cls = up >= 0 ? "up" : "dn";
@@ -968,16 +970,7 @@ function astkRender(){
     document.getElementById("astkBack").innerHTML = '同规则回测 ' + b.from + ' ~ ' + b.to + ':<b class="' + (b.ret >= 0 ? "up" : "dn") + '">' +
       (b.ret >= 0 ? "+" : "") + b.ret + '%</b>(最大回撤 ' + b.dd + '%, ' + b.trades + '笔) vs 沪深300买持 <b>' + (b.bh >= 0 ? "+" : "") + b.bh + '%</b> —— 虚拟盘自 2026-09-30 起向前实测';
   }
-  var pt = document.getElementById("astkPosT").querySelector("tbody");
-  pt.innerHTML = "";
-  (astkData.pos || []).forEach(function(p){
-    var u = p.upnl, cls2 = u >= 0 ? "up" : "dn";
-    var tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + p.name + "</td><td>" + p.qty + "</td><td>" + p.cost + "</td><td>" + (p.px || "-") + "</td>" +
-                   '<td class="' + cls2 + '">' + (u >= 0 ? "+" : "") + u + "</td>";
-    pt.appendChild(tr);
-  });
-  document.getElementById("astkPosT").style.display = (astkData.pos || []).length ? "table" : "none";
+  astkRenderPos();
   var momTop = (astkData.mom || []).slice().sort(function(a, b){ return b.mom - a.mom; }).slice(0, 5);
   document.getElementById("astkMom").innerHTML = "<b>14日动量榜(前5):</b> " + momTop.map(function(m){
     return m.name + " <span class='" + (m.mom >= 0 ? "up" : "dn") + "'>" + (m.mom >= 0 ? "+" : "") + m.mom + "%</span>";
@@ -991,6 +984,61 @@ function astkRender(){
     ht.appendChild(tr2);
   });
   document.getElementById("astkHistT").style.display = (astkData.hist || []).length ? "table" : "none";
+  astkFetchPx();
+  botApplyMode();
+}
+function astkRenderPos(){
+  var pt = document.getElementById("astkPosT").querySelector("tbody");
+  pt.innerHTML = "";
+  (astkData.pos || []).forEach(function(p){
+    var px = (typeof astkPx[p.name] === "number") ? astkPx[p.name] : p.px;
+    var hasPx = (typeof px === "number");
+    var u = hasPx ? (p.qty * px - p.cost) : p.upnl;
+    var cls2 = u >= 0 ? "up" : "dn";
+    var tr = document.createElement("tr");
+    tr.innerHTML = "<td><b>" + p.name + "</b></td><td>" + p.qty + "</td><td>" + p.cost + "</td><td>" + (hasPx ? px.toFixed(3) : "-") + "</td>" +
+                   '<td class="' + cls2 + '">' + (u >= 0 ? "+" : "") + u.toFixed(2) + "</td>";
+    pt.appendChild(tr);
+  });
+  document.getElementById("astkPosT").style.display = (astkData.pos || []).length ? "table" : "none";
+}
+var ASTK_SECIDS = {
+  "沪深300":"1.510300", "中证500":"1.510500", "中证1000":"1.512100", "科创50":"1.588000",
+  "创业板":"0.159915", "酒ETF":"1.512690", "光伏ETF":"1.515790", "半导体ETF":"1.512480",
+  "银行ETF":"1.512800", "证券ETF":"1.512880"
+};
+var astkPx = {};
+function astkFetchPx(){
+  if (curMode !== "cn" || !astkData) return;
+  var ids = [];
+  (astkData.pos || []).forEach(function(p){
+    var s = ASTK_SECIDS[p.name];
+    if (s && ids.indexOf(s) < 0) ids.push(s);
+  });
+  if (!ids.length) return;
+  jsonp("https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f12,f14&secids=" + ids.join(","))
+    .then(function(j){
+      var d = j && j.data && j.data.diff;
+      if (!d) return;
+      for (var i = 0; i < d.length; i++){
+        var code = String(d[i].f12);
+        for (var nm in ASTK_SECIDS){
+          if (ASTK_SECIDS[nm].split(".")[1] === code && typeof d[i].f2 === "number" && d[i].f2 > 0) astkPx[nm] = d[i].f2;
+        }
+      }
+      astkRenderPos();
+    })
+    .catch(function(){});
+}
+function botApplyMode(){
+  var cn = (curMode === "cn");
+  var cb = document.getElementById("botCryptoBody"), ab = document.getElementById("botAstkBody");
+  if (!cb || !ab) return;
+  cb.style.display = cn ? "none" : "block";
+  ab.style.display = cn ? "block" : "none";
+  var sp = document.getElementById("botSync");
+  if (cn) sp.textContent = astkData ? ("A股虚拟盘 · 数据截至 " + astkData.updated + " · 5分钟自动刷新 · 持仓现价盘中实时") : "";
+  else sp.textContent = botData ? ("数据 " + botData.ts + " UTC · 行情 60 秒 / 机器人数据 3 分钟自动刷新") : "";
 }
 function astkSync(){
   astkGet()
@@ -998,12 +1046,13 @@ function astkSync(){
     .then(function(j){ astkData = j; astkRender(); })
     .catch(function(){
       if (astkData) { astkRender(); return; }
-      document.getElementById("astkCard").style.display = "block";
+      document.getElementById("botCard").style.display = "block";
       document.getElementById("astkSummary").innerHTML = '<span class="dn">暂时连不上A股虚拟盘数据(数据由电脑每日15:35推送)。</span>';
     });
 }
 astkSync();
 setInterval(astkSync, 300000);
+setInterval(function(){ if (curMode === "cn" && astkData) astkFetchPx(); }, 60000);
 </script>
 </body>
 </html>
