@@ -102,7 +102,7 @@
   </div>
   <div id="botAstkBody" style="display:none;">
     <div id="astkSummary" class="mut">等待A股虚拟盘数据…</div>
-    <div class="note" style="font-size:11px; margin-top:4px;">规则:10 只 ETF · 14 个交易日动量 · 每周五收盘出信号 → 下一交易日开盘价成交 · 前 2 名各 1/2,动量 ≤ 0 的名额持币</div>
+    <div class="note" style="font-size:11px; margin-top:4px;">规则:12 只 ETF · 14 个交易日动量 · 每周五收盘出信号 → 下一交易日开盘价成交 · 前 3 名各 1/3,动量 ≤ 0 的名额持币</div>
     <div id="astkCurve" style="margin-top:10px;"></div>
     <div class="note" style="margin-top:6px; font-size:11px;" id="astkBack"></div>
     <table class="hist" id="astkPosT" style="margin-top:10px; display:none;"><thead><tr><th>持仓ETF</th><th>股数</th><th>成本(¥)</th><th>现价</th><th>浮盈浮亏(¥)</th></tr></thead><tbody></tbody></table>
@@ -968,7 +968,7 @@ function astkRender(){
   if (astkData.back) {
     var b = astkData.back;
     document.getElementById("astkBack").innerHTML = '同规则回测 ' + b.from + ' ~ ' + b.to + ':<b class="' + (b.ret >= 0 ? "up" : "dn") + '">' +
-      (b.ret >= 0 ? "+" : "") + b.ret + '%</b>(最大回撤 ' + b.dd + '%, ' + b.trades + '笔) vs 沪深300买持 <b>' + (b.bh >= 0 ? "+" : "") + b.bh + '%</b> —— 虚拟盘自 2026-09-30 起向前实测';
+      (b.ret >= 0 ? "+" : "") + b.ret + '%</b>(最大回撤 ' + b.dd + '%, ' + b.trades + '笔) vs 沪深300买持 <b>' + (b.bh >= 0 ? "+" : "") + b.bh + '%</b> —— 统一手册规则,新账本自 2026-10-09 信号起实测';
   }
   astkRenderPos();
   var momTop = (astkData.mom || []).slice().sort(function(a, b){ return b.mom - a.mom; }).slice(0, 5);
@@ -1003,9 +1003,9 @@ function astkRenderPos(){
   document.getElementById("astkPosT").style.display = (astkData.pos || []).length ? "table" : "none";
 }
 var ASTK_SECIDS = {
-  "沪深300":"1.510300", "中证500":"1.510500", "中证1000":"1.512100", "科创50":"1.588000",
-  "创业板":"0.159915", "酒ETF":"1.512690", "光伏ETF":"1.515790", "半导体ETF":"1.512480",
-  "银行ETF":"1.512800", "证券ETF":"1.512880"
+  "沪深300":"1.510300", "创业板":"0.159915", "证券ETF":"1.512880", "医疗ETF":"1.512170",
+  "酒ETF":"1.512690", "半导体ETF":"1.512480", "有色ETF":"1.512400", "军工ETF":"1.512660",
+  "银行ETF":"1.512800", "新能源车ETF":"1.515030", "黄金ETF":"1.518880", "纳指ETF":"1.513100"
 };
 var astkPx = {};
 function astkFetchPx(){
