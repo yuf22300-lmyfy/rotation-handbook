@@ -809,6 +809,7 @@ function botAct(a){
   if (a.indexOf("SHORT") === 0) return '<span style="color:#b39ddb">开空</span>';
   if (a.indexOf("COVER") === 0) return '<span style="color:#7f9bff">平空</span>';
   if (a === "REBASE") return '<span class="mut">空头资金重定位</span>';
+  if (a === "CASH-SYNC") return '<span class="mut">现金同步(入金/出金)</span>';
   return a;
 }
 function botLocalTime(utcStr){
