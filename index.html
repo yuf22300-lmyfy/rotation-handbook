@@ -903,19 +903,22 @@ function botRender(){
   (d.shorts || []).forEach(function(S){ if (!S) return; var p2 = botPx[S.c] || S.entry; sv += S.entry * S.q; supl += (S.entry - p2) * S.q; inv += S.entry * S.q; });
   var upl = lupl + supl;
   var eq = (d.cash || 0) + lv + sv + supl;
+  var base = (d.base != null && isFinite(d.base) && d.base > 0) ? d.base : (inv > 0 ? inv : null);
   var rep = botReplay();
   var total = rep.realized + upl;
   var cls = function(v){ return v >= 0 ? 'up' : 'dn'; };
   var sgn = function(v){ return (v >= 0 ? '+' : '') + fmt(v); };
   var h = '<div class="botChips">';
   h += '<div class="chip">总盈亏<b class="' + cls(total) + '">' + sgn(total) + '</b>USDT</div>';
-  h += '<div class="chip">运行以来总收益<b class="' + cls(total) + '">' + (total >= 0 ? '+' : '') + (inv > 0 ? (100 * total / inv).toFixed(2) : "0.00") + '%</b></div>';
+  h += '<div class="chip">账户权益<b style="color:#d1d4dc">' + fmt(eq) + '</b>USDT</div>';
+  h += '<div class="chip">运行以来总收益<b class="' + cls(total) + '">' + (total >= 0 ? '+' : '') + (base ? (100 * total / base).toFixed(2) : "0.00") + '%</b></div>';
   h += '<div class="chip">已实现<b class="' + cls(rep.realized) + '">' + sgn(rep.realized) + '</b></div>';
   h += '<div class="chip">浮动(未实现)<b class="' + cls(upl) + '">' + sgn(upl) + '</b></div>';
-  h += '<div class="chip">已投入<b style="color:#d1d4dc">' + fmt(inv) + '</b>USDT</div>';
+  h += '<div class="chip">净投入<b style="color:#d1d4dc">' + (d.base != null ? fmt(d.base) : "—") + '</b>USDT</div>';
+  h += '<div class="chip">当前占用<b style="color:#d1d4dc">' + fmt(inv) + '</b>USDT</div>';
   h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + (d.acctAvail != null ? fmt(d.acctAvail) : "—") + '</b>USDT</div>';
   h += '</div>';
-  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 已投入=现货成本+空单保证金(1x); 可用现金=OKX账户实际可用USDT(全账户口径); 运行以来总收益=总盈亏÷当前投入本金。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费。</div>';
+  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 账户权益=可用现金+占用+浮动; 净投入=本金+入金−出金(由现金同步自动校正); 运行以来总收益=总盈亏÷净投入。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费; 当前占用=现货成本+空单保证金(1x)。</div>';
   document.getElementById("botSummary").innerHTML = h;
   var rows = "";
   (d.longs || []).forEach(function(L){
