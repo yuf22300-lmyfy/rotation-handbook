@@ -959,7 +959,8 @@ function botRender(){
   botApplyMode();
 }
 function botGetData(){
-  return botFetch(BOT_API, 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
+  var bust = "?t=" + Date.now();
+  return botFetch(BOT_API + bust, 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
     .then(function(j){
       if (!j || !j.content) throw new Error("no content");
       return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, "")))));
@@ -985,7 +986,7 @@ var ASTK_API = "https://api.github.com/repos/yuf22300-lmyfy/rotation-handbook/co
 var ASTK_RAW = "https://raw.githubusercontent.com/yuf22300-lmyfy/rotation-handbook/main/_bot/astock.json";
 var astkData = null;
 function astkGet(){
-  return botFetch(ASTK_API, 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
+  return botFetch(ASTK_API + "?t=" + Date.now(), 9000).then(function(r){ if (!r.ok) throw new Error("api " + r.status); return r.json(); })
     .then(function(j){
       if (!j || !j.content) throw new Error("no content");
       return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, "")))));
