@@ -819,7 +819,7 @@ function botAct(a){
   if (a.indexOf("SHORT") === 0) return '<span style="color:#b39ddb">开空</span>';
   if (a.indexOf("COVER") === 0) return '<span style="color:#7f9bff">平空</span>';
   if (a === "REBASE") return '<span class="mut">空头资金重定位</span>';
-  if (a === "CASH-SYNC") return '<span class="mut">现金同步(入金/出金)</span>';
+  if (a === "CASH-SYNC") return '<span class="mut">现金同步(自动校验)</span>';
   return a;
 }
 function botLocalTime(utcStr){
@@ -859,7 +859,9 @@ function botReplay(){
       buyPx = isNaN(e) ? null : e; sellPx = p;
     }
     if (pnl !== null){ out.realized += pnl; out.cum.push(Math.round(out.realized * 100) / 100); }
-    out.rows.push({ raw: f, pnl: pnl, buyPx: buyPx, sellPx: sellPx });
+    var drift;
+    if (a === "CASH-SYNC" && !isNaN(parseFloat(f[7]))) drift = parseFloat(f[7]);
+    out.rows.push({ raw: f, pnl: pnl, buyPx: buyPx, sellPx: sellPx, drift: drift });
   }
   return out;
 }
@@ -955,7 +957,7 @@ function botRender(){
     if (r.pnl !== null && r.pnl !== undefined){
       tr += "<td class='" + (r.pnl >= 0 ? 'up' : 'dn') + "'><b>" + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + "</b></td>";
       trades.push({ label: f[2] + " " + botLocalTime(f[0]).slice(0, 5), pnl: r.pnl });
-    } else tr += "<td class='mut'>—</td>";
+    } else if (r.drift !== undefined) { tr += "<td class='mut'>" + (r.drift >= 0 ? '+' : '') + r.drift + "</td>"; } else tr += "<td class='mut'>—</td>";
     tr += "</tr>";
   });
   if (tr){
