@@ -953,7 +953,10 @@ function botRender(){
   var tr = "";
   rep.rows.forEach(function(r){
     var f = r.raw;
-    tr += "<tr><td>" + botLocalTime(f[0]) + "</td><td>" + botAct(f[3]) + "</td><td><b>" + f[2] + "</b></td><td>" + f[4] + "</td><td>" + (r.buyPx != null ? fmt(r.buyPx, r.buyPx < 1 ? 4 : 2) : "—") + "</td><td>" + (r.sellPx != null ? fmt(r.sellPx, r.sellPx < 1 ? 4 : 2) : "—") + "</td><td class='mut'>" + f[6] + "</td>";
+    var act = botAct(f[3]);
+    if (f[3] === "CASH-SYNC" && r.drift !== undefined && Math.abs(r.drift) >= 1) act = r.drift > 0 ? '<span style="color:var(--green)">入金</span>' : '<span style="color:var(--red)">出金</span>';
+    var coinCell = f[2] === "-" ? "—" : ("<b>" + f[2] + "</b>");
+    tr += "<tr><td>" + botLocalTime(f[0]) + "</td><td>" + act + "</td><td>" + coinCell + "</td><td>" + f[4] + "</td><td>" + (r.buyPx != null ? fmt(r.buyPx, r.buyPx < 1 ? 4 : 2) : "—") + "</td><td>" + (r.sellPx != null ? fmt(r.sellPx, r.sellPx < 1 ? 4 : 2) : "—") + "</td><td class='mut'>" + f[6] + "</td>";
     if (r.pnl !== null && r.pnl !== undefined){
       tr += "<td class='" + (r.pnl >= 0 ? 'up' : 'dn') + "'><b>" + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + "</b></td>";
       trades.push({ label: f[2] + " " + botLocalTime(f[0]).slice(0, 5), pnl: r.pnl });
