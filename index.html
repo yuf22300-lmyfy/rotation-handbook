@@ -831,36 +831,55 @@ function botLocalTime(utcStr){
 function botReplay(){
   var out = { rows: [], cum: [0], realized: 0, pctSum: 0 };
   if (!botData || !botData.tail) return out;
-  var cost = {}, qty = {};
+  var cost = {}, qty = {}, eq0 = {}, shorts = {}, openLong = 0, openShortM = 0;
   for (var i = 0; i < botData.tail.length; i++){
     var f = String(botData.tail[i]).split(",");
     if (f.length < 7) continue;
     var a = f[3], c = f[2], q = parseFloat(f[4]), p = parseFloat(f[5]);
     if (isNaN(q) || isNaN(p)) continue;
-    var pnl = null, buyPx = null, sellPx = null;
-    if (a.indexOf("BUY") === 0){ qty[c] = (qty[c] || 0) + q; cost[c] = (cost[c] || 0) + q * p / 0.999; buyPx = p; }
+    var pnl = null, buyPx = null, sellPx = null, drift;
+    var cashAfter = parseFloat(f[6]);
+    if (a.indexOf("BUY") === 0){
+      var spend = q * p;
+      var eqB = (isNaN(cashAfter) ? 0 : cashAfter) + spend + openLong + openShortM;
+      qty[c] = (qty[c] || 0) + q; cost[c] = (cost[c] || 0) + q * p / 0.999; eq0[c] = eqB;
+      openLong += spend;
+      buyPx = p;
+    }
     else if (a.indexOf("SELL") === 0){
       var have = qty[c] || 0;
       if (have > 0){
         var avg = cost[c] / have;
         pnl = q * p * 0.999 - q * avg;
-        out.pctSum += pnl / (q * avg) * 100;
+        if (eq0[c] > 0) out.pctSum += pnl / eq0[c] * 100;
         buyPx = Math.round(avg * 10000) / 10000;
         var sold = Math.min(q, have);
-        qty[c] = have - sold; cost[c] = cost[c] - avg * sold;
+        cost[c] = cost[c] - avg * sold;
+        qty[c] = have - sold;
+        openLong = Math.max(0, openLong - avg * sold);
+        if (qty[c] <= 0) delete eq0[c];
       }
       sellPx = p;
     }
-    else if (a.indexOf("SHORT") === 0){ buyPx = p; }
+    else if (a.indexOf("SHORT") === 0){
+      var margin = q * p;
+      var eqS = (isNaN(cashAfter) ? 0 : cashAfter) + margin + openLong + openShortM;
+      shorts[c] = { q: q, entry: p, margin: margin, eq0: eqS };
+      openShortM += margin;
+      buyPx = p;
+    }
     else if (a.indexOf("COVER") === 0){
       var e = parseFloat(f[7]);
-      if (!isNaN(e)) pnl = (e - p) * q - 0.001 * q * p;
-      if (!isNaN(e)) out.pctSum += pnl / (e * q) * 100;
+      if (!isNaN(e)){
+        pnl = (e - p) * q - 0.001 * q * p;
+        if (shorts[c] && shorts[c].eq0 > 0) out.pctSum += pnl / shorts[c].eq0 * 100;
+        openShortM = Math.max(0, openShortM - (shorts[c] ? shorts[c].margin : e * q));
+        delete shorts[c];
+      }
       buyPx = isNaN(e) ? null : e; sellPx = p;
     }
-    if (pnl !== null){ out.realized += pnl; out.cum.push(Math.round(out.realized * 100) / 100); }
-    var drift;
     if (a === "CASH-SYNC" && !isNaN(parseFloat(f[7]))) drift = parseFloat(f[7]);
+    if (pnl !== null){ out.realized += pnl; out.cum.push(Math.round(out.realized * 100) / 100); }
     out.rows.push({ raw: f, pnl: pnl, buyPx: buyPx, sellPx: sellPx, drift: drift });
   }
   return out;
@@ -926,14 +945,14 @@ function botRender(){
   h += '<div class="chip">总盈亏<b class="' + cls(total) + '">' + sgn(total) + '</b>USDT</div>';
   h += '<div class="chip">账户权益<b style="color:#d1d4dc">' + fmt(eq) + '</b>USDT</div>';
   h += '<div class="chip">运行以来总收益<b class="' + cls(total) + '">' + (total >= 0 ? '+' : '') + (base ? (100 * total / base).toFixed(2) : "0.00") + '%</b></div>';
-  h += '<div class="chip">逐笔收益率合计<b class="' + cls(rep.pctSum) + '" title="每笔盈亏÷该笔投入,逐笔相加(不复利),衡量策略手艺">' + (rep.pctSum >= 0 ? '+' : '') + rep.pctSum.toFixed(1) + '%</b></div>';
+  h += '<div class="chip">每仓收益占比合计<b class="' + cls(rep.pctSum) + '" title="每仓盈亏÷开仓前账户总权益,逐仓相加(不复利)">' + (rep.pctSum >= 0 ? '+' : '') + rep.pctSum.toFixed(1) + '%</b></div>';
   h += '<div class="chip">已实现<b class="' + cls(rep.realized) + '">' + sgn(rep.realized) + '</b></div>';
   h += '<div class="chip">浮动(未实现)<b class="' + cls(upl) + '">' + sgn(upl) + '</b></div>';
   h += '<div class="chip">净投入<b style="color:#d1d4dc">' + (d.base != null ? fmt(d.base) : "—") + '</b>USDT</div>';
   h += '<div class="chip">当前占用<b style="color:#d1d4dc">' + fmt(inv) + '</b>USDT</div>';
   h += '<div class="chip">可用现金<b style="color:#d1d4dc">' + (d.acctAvail != null ? fmt(d.acctAvail) : "—") + '</b>USDT</div>';
   h += '</div>';
-  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 账户权益=可用现金+占用+浮动; 净投入=本金+入金−出金(由现金同步自动校正); 运行以来总收益=总盈亏÷净投入(<b>钱包真实增长</b>); 逐笔收益率合计=每笔盈亏÷该笔投入逐笔相加(<b>不复利</b>,衡量策略手艺,通常高于账户收益,差额=闲置资金未参与+无复利)。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费; 当前占用=现货成本+空单保证金(1x)。</div>';
+  h += '<div class="mut" style="font-size:12px;">模式:<b>' + d.mode + '</b> · 上次调仓:' + (d.lastWeekly || "尚无") + ' · 账户权益=可用现金+占用+浮动; 净投入=本金+入金−出金(由现金同步自动校正); 运行以来总收益=总盈亏÷净投入(<b>钱包真实增长</b>); 每仓收益占比合计=每仓盈亏÷<b>开仓前账户总权益</b>,逐仓相加(不复利,衡量每仓对整个账户的贡献)。已实现=平仓落袋(扣手续费估算); 浮动=按 OKX 实时价估算,未扣资金费; 当前占用=现货成本+空单保证金(1x)。</div>';
   document.getElementById("botSummary").innerHTML = h;
   var rows = "";
   (d.longs || []).forEach(function(L){
